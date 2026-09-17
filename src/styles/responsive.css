@@ -1,0 +1,81 @@
+/* ==============================================================================
+   PressWala - Responsive & Mobile PWA Enhancements
+   ============================================================================== */
+
+@media (max-width: 640px) {
+  .main-content {
+    padding: 0.875rem 0.75rem;
+  }
+
+  .brand-title {
+    font-size: 1rem;
+  }
+
+  .brand-subtitle {
+    display: none;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .metric-card {
+    padding: 0.875rem;
+  }
+
+  .metric-value {
+    font-size: 1.45rem;
+  }
+
+  .metric-label {
+    font-size: 0.7rem;
+  }
+
+  .order-card {
+    padding: 1rem 0.875rem;
+  }
+
+  .order-stepper {
+    margin: 1rem 0;
+    padding: 0;
+  }
+
+  .step-circle {
+    width: 26px;
+    height: 26px;
+    font-size: 0.65rem;
+  }
+
+  .step-label {
+    font-size: 0.625rem;
+  }
+
+  .stepper-progress-line {
+    top: 13px;
+  }
+
+  .garments-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .modal-content {
+    padding: 1.25rem 1rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .table-responsive {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-container {
+    padding-bottom: 2rem;
+  }
+
+  .bottom-nav {
+    display: none; /* Desktop uses top navigation */
+  }
+}

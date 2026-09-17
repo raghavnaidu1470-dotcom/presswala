@@ -1,0 +1,93 @@
+# PressWala — Ironing Vendor Order & Payment Tracker (PWA)
+
+A responsive, zero-cost Progressive Web App (PWA) designed for local cloth-ironing ("dhobi") vendors and apartment residents. It replaces informal WhatsApp messaging with an organized, error-proof order tracker and payment register.
+
+---
+
+## Key Features
+
+- **Customer Portal (Resident)**:
+  - Simple Flat Number + 4-digit PIN authentication (zero SMS/gateway costs).
+  - Create Order: Visual garment selection with real-time price calculation.
+  - My Orders: Track status through the 4-stage lifecycle (`Created` → `In Progress` → `Ready` → `Delivered`).
+  - Payment Summary: Instant view of total paid vs. outstanding balance, with one-tap UPI payment trigger.
+- **Vendor Portal (Dhobi)**:
+  - Metric Dashboard: At-a-glance counts for *New Orders*, *In Progress*, *Completed Today*, and *Total Outstanding Dues*.
+  - Order Management: Filter by Flat Number or Status, with quick actions to advance clothes through `In Progress` and `Ready`.
+  - **Mandatory Delivery Payment Prompt**: When marking an order `Delivered` at the doorstep, the app prompts the vendor to record whether payment was collected (`Cash` / `UPI`) or left `Unpaid (Collect Later)`. It cannot be silently skipped, ensuring unpaid clothes never get forgotten.
+  - Outstanding Dues Ledger: View all unpaid balances, send pre-filled WhatsApp reminders in 1 click, and mark payments collected later.
+  - Customer Directory & Price List Editor: Maintain resident profiles and adjust garment prices on the fly.
+- **Dual-Storage Engine**:
+  - Runs out of the box with persistent local storage (seeded with realistic apartment data).
+  - Connects to Supabase PostgreSQL in real-time when environment variables are set.
+
+---
+
+## 4-Stage Lifecycle Flow
+
+```
+[Created] ──(Vendor Picks Up)──> [In Progress] ──(Ironing Done)──> [Ready] ──(Doorstep Delivery)──> [Delivered]
+                                                                                                        │
+                                                                                [Mandatory Payment Prompt Modal]
+                                                                                ├── Paid (Cash or UPI)
+                                                                                └── Unpaid (Flagged in Outstanding)
+```
+
+---
+
+## Quickstart & Local Setup
+
+### 1. Clone & Install Dependencies
+```bash
+git clone <your-repo-url>
+cd presswala
+npm install
+```
+
+### 2. Environment Configuration
+```bash
+cp .env.example .env
+```
+Open `.env` and optionally enter your free Supabase credentials:
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+VITE_APARTMENT_NAME="Palm Heights Apartments"
+VITE_VENDOR_NAME="Ramu Dhobi"
+VITE_VENDOR_PHONE="9876543210"
+VITE_VENDOR_UPI_ID="dhobi@upi"
+```
+*(If left empty, the app runs in full Offline-First mode with simulated persistence).*
+
+### 3. Database Migration (for Supabase)
+To provision the PostgreSQL schema on your Supabase project:
+1. Open your project on [Supabase Dashboard](https://supabase.com/dashboard).
+2. Go to the **SQL Editor**.
+3. Copy the contents of `supabase/migrations/001_initial_schema.sql`, paste, and click **Run**.
+
+### 4. Start Development Server
+```bash
+npm run dev
+```
+Visit `http://localhost:5173` on your browser or mobile phone on the same Wi-Fi.
+
+---
+
+## Deployment (Vercel / Netlify)
+
+This repository is pre-configured for zero-configuration static deployment:
+
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Environment Variables**: Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in your Vercel or Netlify project settings.
+
+---
+
+## Default Demo Credentials
+
+- **Resident (Customer)**:
+  - Flat: `A-101` | PIN: `1010` (Sharma Ji)
+  - Flat: `A-204` | PIN: `2040` (Pooja Verma — has ₹110 outstanding order)
+  - Flat: `B-302` | PIN: `3020` (Karthik Raja)
+- **Vendor**:
+  - Login Key: `VENDOR` or `9876543210` | PIN: `1234`
