@@ -28,6 +28,28 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized: Only an authenticated vendor can reset resident passwords';
     END IF;
 
+    -- Enforce password complexity inside the RPC itself (database is source of truth):
+    -- Rejects any password under 6 characters or missing uppercase, lowercase, digit, or special character.
+    IF p_new_password IS NULL OR length(p_new_password) < 6 THEN
+        RAISE EXCEPTION 'Password does not meet complexity requirements: must be at least 6 characters long';
+    END IF;
+
+    IF p_new_password !~ '[A-Z]' THEN
+        RAISE EXCEPTION 'Password does not meet complexity requirements: must contain at least one uppercase letter';
+    END IF;
+
+    IF p_new_password !~ '[a-z]' THEN
+        RAISE EXCEPTION 'Password does not meet complexity requirements: must contain at least one lowercase letter';
+    END IF;
+
+    IF p_new_password !~ '[0-9]' THEN
+        RAISE EXCEPTION 'Password does not meet complexity requirements: must contain at least one digit';
+    END IF;
+
+    IF p_new_password !~ '[^a-zA-Z0-9]' THEN
+        RAISE EXCEPTION 'Password does not meet complexity requirements: must contain at least one special character';
+    END IF;
+
     -- Look up auth user id from profiles table
     SELECT id INTO v_auth_user_id
     FROM public.profiles
@@ -44,6 +66,15 @@ BEGIN
         encrypted_password = crypt(p_new_password, gen_salt('bf')),
         updated_at = NOW()
     WHERE id = v_auth_user_id;
+
+    -- Invalidate resident's existing active sessions and refresh tokens
+    -- Deleting rows matching v_auth_user_id forces any active device to log in again with the new password
+    DELETE FROM auth.refresh_tokens 
+    WHERE session_id IN (SELECT id FROM auth.sessions WHERE user_id = v_auth_user_id)
+       OR user_id::text = v_auth_user_id::text;
+
+    DELETE FROM auth.sessions 
+    WHERE user_id = v_auth_user_id;
 
     -- Log the administrative reset action
     INSERT INTO public.login_attempts (login_key, success, user_agent)

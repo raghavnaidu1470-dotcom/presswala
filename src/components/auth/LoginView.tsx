@@ -25,15 +25,15 @@ export const LoginView: React.FC = () => {
   
   // Resident / Vendor Form State
   const [flatNumber, setFlatNumber] = useState('');
-  const [pin, setPin] = useState('');
+  const [password, setPassword] = useState('');
   const [vendorKey, setVendorKey] = useState('VENDOR');
-  const [vendorPin, setVendorPin] = useState('Demo@1234');
+  const [vendorPassword, setVendorPassword] = useState('Demo@1234');
 
   // Register Form State
   const [regName, setRegName] = useState('');
   const [regFlat, setRegFlat] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regPin, setRegPin] = useState('');
+  const [regPassword, setRegPassword] = useState('');
 
   // Forgot Password Assistance State
   const [forgotFlat, setForgotFlat] = useState('');
@@ -89,7 +89,7 @@ export const LoginView: React.FC = () => {
   const handleResidentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!flatNumber.trim() || !pin.trim()) {
+    if (!flatNumber.trim() || !password.trim()) {
       setError('Please enter both your Flat Number and Password');
       return;
     }
@@ -110,7 +110,7 @@ export const LoginView: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const success = await login(normalizedFlat, pin);
+      const success = await login(normalizedFlat, password);
       if (!success) {
         const afterStatus = loginSecurity.checkLockout(normalizedFlat);
         if (afterStatus.isLocked) {
@@ -134,7 +134,7 @@ export const LoginView: React.FC = () => {
   const handleVendorLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!vendorKey.trim() || !vendorPin.trim()) {
+    if (!vendorKey.trim() || !vendorPassword.trim()) {
       setError('Please enter Vendor ID and Password');
       return;
     }
@@ -148,7 +148,7 @@ export const LoginView: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const success = await login(vendorKey, vendorPin);
+      const success = await login(vendorKey, vendorPassword);
       if (!success) {
         const afterStatus = loginSecurity.checkLockout(vendorKey);
         if (afterStatus.isLocked) {
@@ -172,7 +172,7 @@ export const LoginView: React.FC = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!regName.trim() || !regFlat.trim() || !regPhone.trim() || !regPin.trim()) {
+    if (!regName.trim() || !regFlat.trim() || !regPhone.trim() || !regPassword.trim()) {
       setError('Please fill in all fields');
       return;
     }
@@ -193,14 +193,14 @@ export const LoginView: React.FC = () => {
       return;
     }
     
-    if (!validators.isValidPassword(regPin)) {
+    if (!validators.isValidPassword(regPassword)) {
       setError('Password must be min 6 characters and include an uppercase, lowercase, digit, and special character');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await registerResident(regName, normalizedFlat, regPhone, regPin);
+      await registerResident(regName, normalizedFlat, regPhone, regPassword);
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -552,8 +552,8 @@ export const LoginView: React.FC = () => {
                   type="password"
                   className="login-input"
                   placeholder="Enter your password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
 
@@ -599,8 +599,8 @@ export const LoginView: React.FC = () => {
                   type="password"
                   className="login-input"
                   placeholder="Enter Password (Default: Demo@1234)"
-                  value={vendorPin}
-                  onChange={(e) => setVendorPin(e.target.value)}
+                  value={vendorPassword}
+                  onChange={(e) => setVendorPassword(e.target.value)}
                 />
               </div>
 
@@ -670,8 +670,8 @@ export const LoginView: React.FC = () => {
                   type="password"
                   className="login-input"
                   placeholder="Upper, lower, digit, special char"
-                  value={regPin}
-                  onChange={(e) => setRegPin(e.target.value)}
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
                 />
               </div>
 

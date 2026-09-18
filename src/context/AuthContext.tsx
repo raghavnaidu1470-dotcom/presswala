@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { db, toSyntheticAuthCredentials } from '../services/db';
+import { db, formatAuthEmail } from '../services/db';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { OFFLINE_DEMO_CREDENTIALS } from '../services/seedData';
 
@@ -8,9 +8,9 @@ interface AuthContextType {
   currentUser: User | null;
   role: UserRole | null;
   isLoading: boolean;
-  login: (loginKey: string, pin: string) => Promise<boolean>;
+  login: (loginKey: string, password: string) => Promise<boolean>;
   logout: () => void;
-  registerResident: (name: string, flatNumber: string, phone: string, pin: string) => Promise<User>;
+  registerResident: (name: string, flatNumber: string, phone: string, password: string) => Promise<User>;
   switchDemoUser: (user: User) => void;
 }
 
@@ -36,8 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = async (loginKey: string, pin: string): Promise<boolean> => {
-    const user = await db.authenticateUser(loginKey, pin);
+  const login = async (loginKey: string, password: string): Promise<boolean> => {
+    const user = await db.authenticateUser(loginKey, password);
     if (user) {
       setCurrentUser(user);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
@@ -58,9 +58,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string, 
     flatNumber: string, 
     phone: string, 
-    pin: string
+    password: string
   ): Promise<User> => {
-    const newUser = await db.registerResident(name, flatNumber, phone, pin);
+    const newUser = await db.registerResident(name, flatNumber, phone, password);
     setCurrentUser(newUser);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
     return newUser;
@@ -71,13 +71,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
     if (isSupabaseConfigured && supabase) {
       const client = supabase;
-      const demoPin = OFFLINE_DEMO_CREDENTIALS[user.flat_number.toUpperCase()] || 'Demo@1234';
-      const { email, password } = toSyntheticAuthCredentials(user.flat_number, demoPin, user.role);
-      client.auth.signInWithPassword({ email, password }).catch(() => {
+      const demoPassword = OFFLINE_DEMO_CREDENTIALS[user.flat_number.toUpperCase()] || 'Demo@1234';
+      const email = formatAuthEmail(user.flat_number, user.role);
+      client.auth.signInWithPassword({ email, password: demoPassword }).catch(() => {
         // If demo user not yet in auth, sign up once
         client.auth.signUp({
           email,
-          password,
+          password: demoPassword,
           options: {
             data: {
               flat_number: user.flat_number,

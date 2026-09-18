@@ -29,23 +29,17 @@ const STORAGE_KEYS = {
 };
 
 // ------------------------------------------------------------------------------
-// Synthetic Auth Helper (Under-the-hood Supabase Auth)
+// Synthetic Auth Email Helper (Under-the-hood Supabase Auth)
 // ------------------------------------------------------------------------------
-export function toSyntheticAuthCredentials(
+export function formatAuthEmail(
   loginKey: string, 
-  pin: string, 
   role: 'customer' | 'vendor' = 'customer'
-) {
+): string {
   const cleanKey = loginKey.trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
   const isVendor = role === 'vendor' || cleanKey === 'vendor' || cleanKey === '9876543210';
-  const email = isVendor 
+  return isVendor 
     ? 'vendor@presswala.internal' 
     : `flat-${cleanKey}@presswala.internal`;
-  
-  // Supabase requires at least 6 characters for passwords.
-  // Deterministic salt wrapper ensures any 4-digit PIN or custom password satisfies Supabase.
-  const password = `PW#${pin.trim()}!AuthSecure`;
-  return { email, password, isVendor };
 }
 
 // ------------------------------------------------------------------------------
@@ -89,7 +83,7 @@ export function initializeDatabase(): void {
 // ------------------------------------------------------------------------------
 export const db = {
   // 1. Authentication & Users
-  async authenticateUser(loginKey: string, pin: string): Promise<User | null> {
+  async authenticateUser(loginKey: string, password: string): Promise<User | null> {
     const trimmedKey = loginKey.trim().toUpperCase();
     const normalizedFlatKey = validators.normalizeFlatNumber(trimmedKey);
 
@@ -124,12 +118,12 @@ export const db = {
           }
         }
 
-        const { email, password } = toSyntheticAuthCredentials(authEmailKey, pin, detectedRole);
+        const email = formatAuthEmail(authEmailKey, detectedRole);
 
-        // Authoritative sign-in call
+        // Authoritative sign-in call with direct user password
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
-          password
+          password: password.trim()
         });
 
         if (signInError || !signInData.user) {
@@ -190,12 +184,17 @@ export const db = {
       return null;
     }
 
-    const expectedPin = OFFLINE_DEMO_CREDENTIALS[user.flat_number.toUpperCase()] || 
-                        OFFLINE_DEMO_CREDENTIALS[user.phone] || 
-                        '1234';
+    const expectedPassword = OFFLINE_DEMO_CREDENTIALS[user.flat_number.toUpperCase()] || 
+                            OFFLINE_DEMO_CREDENTIALS[user.phone] || 
+                            'Demo@1234';
 
-    const inputPin = pin.trim();
-    if (inputPin !== expectedPin && inputPin !== 'Demo@1234' && inputPin !== '1010') {
+    const inputPassword = password.trim();
+    if (
+      inputPassword !== expectedPassword && 
+      inputPassword !== 'Demo@1234' && 
+      inputPassword !== 'Demo@1010' && 
+      inputPassword !== '1010'
+    ) {
       const failedStatus = loginSecurity.recordFailedAttempt(trimmedKey);
       if (failedStatus.isLocked) {
         throw new Error(`Maximum login attempts exceeded. Account locked for 3 minutes.`);
@@ -221,7 +220,7 @@ export const db = {
     return users.find(u => u.phone === trimmedPhone) || null;
   },
 
-  async registerResident(name: string, flatNumber: string, phone: string, pin: string): Promise<User> {
+  async registerResident(name: string, flatNumber: string, phone: string, password: string): Promise<User> {
     const users = loadFromStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
     const normalizedFlat = validators.normalizeFlatNumber(flatNumber.trim());
     const trimmedPhone = phone.trim();
@@ -248,14 +247,15 @@ export const db = {
 
     users.push(newUser);
     saveToStorage(STORAGE_KEYS.USERS, users);
+    OFFLINE_DEMO_CREDENTIALS[normalizedFlat.toUpperCase()] = password.trim();
 
     // Sync to Supabase Auth & DB if configured
     if (isSupabaseConfigured && supabase) {
       try {
-        const { email, password } = toSyntheticAuthCredentials(normalizedFlat, pin, 'customer');
+        const email = formatAuthEmail(normalizedFlat, 'customer');
         const { data: authData } = await supabase.auth.signUp({
           email,
-          password,
+          password: password.trim(),
           options: {
             data: {
               flat_number: normalizedFlat,
@@ -293,14 +293,18 @@ export const db = {
   },
 
   // Secure Vendor-assisted Password Reset (Replaces fake OTP flow)
-  async vendorResetResidentPassword(flatNumber: string, newPin: string): Promise<boolean> {
+  async vendorResetResidentPassword(flatNumber: string, newPassword: string): Promise<boolean> {
     const normalizedFlat = validators.normalizeFlatNumber(flatNumber.trim());
 
+    // Password complexity check in application service mirroring database policy
+    if (!validators.isValidPassword(newPassword)) {
+      throw new Error('Password does not meet complexity requirements: must be at least 6 characters and contain an uppercase letter, a lowercase letter, a digit, and a special character');
+    }
+
     if (isSupabaseConfigured && supabase) {
-      const { password } = toSyntheticAuthCredentials(normalizedFlat, newPin, 'customer');
       const { error } = await supabase.rpc('vendor_reset_resident_password', {
         p_flat_number: normalizedFlat,
-        p_new_password: password
+        p_new_password: newPassword.trim()
       });
 
       if (error) {
@@ -310,7 +314,7 @@ export const db = {
     }
 
     // Pure offline demo fallback
-    OFFLINE_DEMO_CREDENTIALS[normalizedFlat.toUpperCase()] = newPin.trim();
+    OFFLINE_DEMO_CREDENTIALS[normalizedFlat.toUpperCase()] = newPassword.trim();
     return true;
   },
 

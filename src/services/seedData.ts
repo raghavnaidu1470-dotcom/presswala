@@ -140,10 +140,10 @@ export const INITIAL_USERS: User[] = [
 export const OFFLINE_DEMO_CREDENTIALS: Record<string, string> = {
   'VENDOR': 'Demo@1234',
   '9876543210': 'Demo@1234',
-  'A-1001': '1010',
-  'A-2004': '2040',
-  'B-3002': '3020',
-  'C-4005': '4050'
+  'A-1001': 'Demo@1010',
+  'A-2004': 'Demo@2040',
+  'B-3002': 'Demo@3020',
+  'C-4005': 'Demo@4050'
 };
 
 export const INITIAL_ORDERS: Order[] = [
