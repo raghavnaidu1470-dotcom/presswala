@@ -67,8 +67,12 @@ To provision the PostgreSQL schema and enforce Row Level Security on your Supaba
 2. Go to the **SQL Editor**.
 3. Run `supabase/migrations/001_initial_schema.sql` to create core tables (`orders`, `order_items`, `payments`, `garment_types`, `users`) and catalog seeds.
 4. Run `supabase/migrations/002_row_level_security.sql` to establish the `profiles` table, automated auth trigger, and Row Level Security (RLS) policies across all tables.
+5. Run `supabase/migrations/003_remove_pin_hash.sql` to strip the `pin_hash` column from the public `users` table and install the vendor-authorized resident password reset RPC.
 
 ### 4. Security & Mobile-First Architecture
+- **Zero Plaintext Secrets**: Passwords and PINs are never stored in application tables (`users`, `profiles`) or client storage. Credentials reside solely in Supabase's hardened `auth.users` table with bcrypt encryption.
+- **Strictly Authoritative Auth**: Login decisions defer completely to Supabase Auth (`signInWithPassword()`). If Supabase reports invalid credentials, login is blocked immediately without falling back to local state.
+- **Vendor-Assisted Account Recovery**: Insecure client-side OTP flows are eliminated. Account resets are verified and triggered directly by the vendor via a PostgreSQL `SECURITY DEFINER` RPC (`vendor_reset_resident_password`).
 - **Real Supabase Auth Under the Hood**: Residents and vendors continue using simple Flat + PIN logins, while the system transparently creates real Supabase Auth sessions (`flat-<flat>@presswala.internal` / `vendor@presswala.internal`) and binds them to `auth.uid()` for database-level RLS enforcement.
 - **Granular Row Level Security**: Residents can only query/insert their own flat's orders and items; only the vendor role can update order statuses or insert payment records.
 - **PIN Brute-Force Lockout**: Automatically blocks attempts after 5 consecutive failures for any flat or vendor key, enforcing a 3-minute cooldown with live timer display.

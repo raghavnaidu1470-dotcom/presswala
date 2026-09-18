@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { CustomerSummary } from '../../types';
 import { db } from '../../services/db';
+import { Modal } from '../common/Modal';
+import { validators } from '../../utils/validators';
 import { 
   Search, 
   MessageCircle, 
   CheckCircle2,
-  Users
+  Users,
+  KeyRound
 } from 'lucide-react';
 
 export const CustomerDirectoryView: React.FC = () => {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [search, setSearch] = useState('');
+  
+  // Vendor-assisted Password Reset Modal State
+  const [resetModalCustomer, setResetModalCustomer] = useState<CustomerSummary | null>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     async function loadDirectory() {
@@ -19,6 +29,38 @@ export const CustomerDirectoryView: React.FC = () => {
     }
     loadDirectory();
   }, []);
+
+  const handleOpenResetModal = (customer: CustomerSummary) => {
+    setResetModalCustomer(customer);
+    setNewPasswordInput('');
+    setResetError(null);
+    setResetSuccess(null);
+  };
+
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetModalCustomer) return;
+    setResetError(null);
+    setResetSuccess(null);
+
+    if (!validators.isValidPassword(newPasswordInput)) {
+      setResetError('Password must be at least 6 characters (with upper, lower, digit, and special char). E.g. Demo@1010');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await db.vendorResetResidentPassword(resetModalCustomer.flat_number, newPasswordInput);
+      setResetSuccess(`Password for Flat ${resetModalCustomer.flat_number} successfully updated! Share it with the resident.`);
+      setTimeout(() => {
+        setResetModalCustomer(null);
+      }, 2200);
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to reset resident password');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const filtered = customers.filter(c => 
     c.flat_number.toLowerCase().includes(search.toLowerCase()) ||
@@ -135,10 +177,98 @@ export const CustomerDirectoryView: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Vendor Actions: Password Reset for Resident */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenResetModal(c)}
+                  className="btn btn-sm btn-outline"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.4rem 0.8rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '8px',
+                    color: 'var(--vendor-muted)'
+                  }}
+                  title="Reset resident password if requested"
+                >
+                  <KeyRound size={14} />
+                  <span>Reset Password</span>
+                </button>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {/* Vendor Password Reset Modal */}
+      {resetModalCustomer && (
+        <Modal
+          isOpen={true}
+          onClose={() => setResetModalCustomer(null)}
+          title={`Reset Password — Flat ${resetModalCustomer.flat_number}`}
+        >
+          <form onSubmit={handleConfirmReset}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--vendor-muted)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              Enter a new password for resident <strong>{resetModalCustomer.customer_name}</strong> (Flat {resetModalCustomer.flat_number}). Once saved, share it directly with them in person or on WhatsApp.
+            </p>
+
+            {resetError && (
+              <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '12px', padding: '0.75rem', color: '#DC2626', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                {resetError}
+              </div>
+            )}
+
+            {resetSuccess && (
+              <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: '12px', padding: '0.75rem', color: '#166534', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                {resetSuccess}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--vendor-text)', marginBottom: '0.4rem' }}>
+                New Password (e.g. Demo@1010)
+              </label>
+              <input
+                type="text"
+                placeholder="Enter new password"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '12px',
+                  background: '#F6F5F2',
+                  border: '1px solid var(--vendor-border)',
+                  fontSize: '0.95rem',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setResetModalCustomer(null)}
+                disabled={isResetting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isResetting}
+              >
+                {isResetting ? 'Saving...' : 'Set Password'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

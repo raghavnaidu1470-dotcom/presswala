@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_USERS } from '../../services/seedData';
 import { User } from '../../types';
-import { db } from '../../services/db';
 import { validators } from '../../utils/validators';
 import { loginSecurity } from '../../services/loginSecurity';
 import { 
@@ -14,8 +13,9 @@ import {
   ShieldCheck,
   Zap,
   KeyRound,
-  MessageSquare,
-  Clock
+  Clock,
+  MessageCircle,
+  Phone
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
@@ -35,11 +35,8 @@ export const LoginView: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regPin, setRegPin] = useState('');
 
-  // Forgot Password State
-  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
-  const [forgotPhone, setForgotPhone] = useState('');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [forgotNewPin, setForgotNewPin] = useState('');
+  // Forgot Password Assistance State
+  const [forgotFlat, setForgotFlat] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -47,6 +44,8 @@ export const LoginView: React.FC = () => {
   const [lockoutRemaining, setLockoutRemaining] = useState<number>(0);
 
   const apartmentName = import.meta.env.VITE_APARTMENT_NAME || 'Palm Heights Apartments';
+  const vendorName = import.meta.env.VITE_VENDOR_NAME || 'Ramu Dhobi';
+  const vendorPhone = import.meta.env.VITE_VENDOR_PHONE || '9876543210';
 
   // Check lockout on active key change
   useEffect(() => {
@@ -81,7 +80,9 @@ export const LoginView: React.FC = () => {
     setActiveTab(tab);
     setError(null);
     setSuccessMsg(null);
-    setForgotStep(1);
+    if (tab === 'forgot' && flatNumber) {
+      setForgotFlat(flatNumber);
+    }
     setLockoutRemaining(0);
   };
 
@@ -204,62 +205,6 @@ export const LoginView: React.FC = () => {
       setError(err.message || 'Registration failed');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMsg(null);
-
-    if (forgotStep === 1) {
-      if (!validators.isValidPhone(forgotPhone)) {
-        setError('Phone number must be exactly 10 digits');
-        return;
-      }
-      setIsSubmitting(true);
-      try {
-        const user = await db.getUserByPhone(forgotPhone);
-        if (!user) {
-          setError(`No account found with phone number ${forgotPhone}. Please register first.`);
-          setIsSubmitting(false);
-          return;
-        }
-        setTimeout(() => {
-          setIsSubmitting(false);
-          setForgotStep(2);
-          setSuccessMsg('OTP sent to your phone! (For demo, use any 4 digits like 1234)');
-        }, 600);
-      } catch (err: any) {
-        setError('Verification failed. Please try again.');
-        setIsSubmitting(false);
-      }
-    } else if (forgotStep === 2) {
-      if (forgotOtp.length < 4) {
-        setError('Please enter a valid 4-digit OTP');
-        return;
-      }
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setForgotStep(3);
-        setSuccessMsg('OTP Verified! Enter your new password.');
-      }, 600);
-    } else if (forgotStep === 3) {
-      if (!validators.isValidPassword(forgotNewPin)) {
-        setError('Password must be min 6 characters and include an uppercase, lowercase, digit, and special character');
-        return;
-      }
-      setIsSubmitting(true);
-      try {
-        await db.resetPassword(forgotPhone, forgotNewPin);
-        setSuccessMsg('Password updated successfully! You can now log in.');
-        setTimeout(() => switchTab('resident'), 2000);
-      } catch (err: any) {
-        setError(err.message || 'Failed to reset password');
-      } finally {
-        setIsSubmitting(false);
-      }
     }
   };
 
@@ -743,64 +688,85 @@ export const LoginView: React.FC = () => {
 
           {/* Forgot Password Flow */}
           {activeTab === 'forgot' && (
-            <form onSubmit={handleForgotPassword}>
-              {forgotStep === 1 && (
-                <div>
-                  <label className="login-label">Registered Mobile Number</label>
-                  <input
-                    type="tel"
-                    className="login-input"
-                    placeholder="10-digit number"
-                    maxLength={10}
-                    value={forgotPhone}
-                    onChange={(e) => setForgotPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  />
-                  <button type="submit" className="login-btn" disabled={isSubmitting}>
-                    <span>{isSubmitting ? 'Sending OTP...' : 'Send OTP via SMS'}</span>
-                    <MessageSquare size={20} />
-                  </button>
+            <div>
+              <div style={{ background: '#F6F5F2', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '16px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, color: 'var(--login-text)', fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                  <ShieldCheck size={18} color="var(--login-accent)" />
+                  Apartment Security Verification
                 </div>
-              )}
-              
-              {forgotStep === 2 && (
-                <div>
-                  <label className="login-label">Enter OTP sent to {forgotPhone}</label>
-                  <input
-                    type="text"
-                    className="login-input"
-                    placeholder="e.g. 1234"
-                    maxLength={4}
-                    value={forgotOtp}
-                    onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  />
-                  <button type="submit" className="login-btn" disabled={isSubmitting}>
-                    <span>{isSubmitting ? 'Verifying...' : 'Verify OTP'}</span>
-                    <ShieldCheck size={20} />
-                  </button>
-                </div>
-              )}
+                <p style={{ fontSize: '0.85rem', color: 'var(--login-muted)', lineHeight: 1.5, margin: 0 }}>
+                  To prevent unauthorized account takeovers and SMS spoofing, password resets are verified directly by <strong>{vendorName}</strong>.
+                </p>
+              </div>
 
-              {forgotStep === 3 && (
-                <div>
-                  <label className="login-label">Enter New Password</label>
-                  <input
-                    type="password"
-                    className="login-input"
-                    placeholder="Upper, lower, digit, special char"
-                    value={forgotNewPin}
-                    onChange={(e) => setForgotNewPin(e.target.value)}
-                  />
-                  <button type="submit" className="login-btn" disabled={isSubmitting}>
-                    <span>{isSubmitting ? 'Updating...' : 'Set New Password'}</span>
-                    <KeyRound size={20} />
-                  </button>
-                </div>
-              )}
-              
-              <button type="button" className="forgot-link" onClick={() => switchTab('resident')} style={{ color: 'var(--login-muted)', fontWeight: 500 }}>
-                Cancel & Back to Login
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="login-label">Your Flat Number</label>
+                <input
+                  type="text"
+                  className="login-input"
+                  placeholder="e.g. S-3907 or A-1001"
+                  value={forgotFlat}
+                  onChange={(e) => setForgotFlat(e.target.value.toUpperCase())}
+                  style={{ marginBottom: '1rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <a
+                  href={`https://wa.me/91${vendorPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                    `Namaste ${vendorName}, I forgot my PressWala password for Flat ${forgotFlat.trim() || '[Please specify]'}. Could you please verify and help me reset it?`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="login-btn"
+                  style={{
+                    background: '#25D366',
+                    color: '#FFFFFF',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    borderRadius: '16px',
+                    padding: '0.9rem 1rem',
+                    fontWeight: 700
+                  }}
+                >
+                  <MessageCircle size={20} />
+                  <span>Message {vendorName} on WhatsApp</span>
+                </a>
+
+                <a
+                  href={`tel:${vendorPhone.replace(/\D/g, '')}`}
+                  className="btn btn-outline"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    borderRadius: '16px',
+                    padding: '0.85rem 1rem',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    color: 'var(--login-text)',
+                    border: '1px solid var(--login-border)'
+                  }}
+                >
+                  <Phone size={18} />
+                  <span>Call Vendor ({vendorPhone})</span>
+                </a>
+              </div>
+
+              <button 
+                type="button" 
+                className="forgot-link" 
+                onClick={() => switchTab('resident')} 
+                style={{ color: 'var(--login-muted)', fontWeight: 600 }}
+              >
+                Cancel & Back to Sign In
               </button>
-            </form>
+            </div>
           )}
         </div>
 

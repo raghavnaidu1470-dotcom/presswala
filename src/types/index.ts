@@ -10,7 +10,6 @@ export interface User {
   flat_number: string;
   phone: string;
   role: UserRole;
-  pin_hash: string;
   notes?: string;
   created_at: string;
 }

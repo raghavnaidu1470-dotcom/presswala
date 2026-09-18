@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { db, toSyntheticAuthCredentials } from '../services/db';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { OFFLINE_DEMO_CREDENTIALS } from '../services/seedData';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -70,7 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
     if (isSupabaseConfigured && supabase) {
       const client = supabase;
-      const { email, password } = toSyntheticAuthCredentials(user.flat_number, user.pin_hash, user.role);
+      const demoPin = OFFLINE_DEMO_CREDENTIALS[user.flat_number.toUpperCase()] || 'Demo@1234';
+      const { email, password } = toSyntheticAuthCredentials(user.flat_number, demoPin, user.role);
       client.auth.signInWithPassword({ email, password }).catch(() => {
         // If demo user not yet in auth, sign up once
         client.auth.signUp({

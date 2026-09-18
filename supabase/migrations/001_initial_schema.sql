@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS users (
     flat_number TEXT NOT NULL UNIQUE, -- e.g. 'A-402' or 'VENDOR'
     phone TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('customer', 'vendor')),
-    pin_hash TEXT NOT NULL, -- 4-digit PIN for instant low-friction login
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -132,13 +131,13 @@ SET price = EXCLUDED.price, name = EXCLUDED.name, category = EXCLUDED.category;
 -- ------------------------------------------------------------------------------
 -- 9. Seed Initial Users (Vendor & Residents)
 -- ------------------------------------------------------------------------------
-INSERT INTO users (id, name, flat_number, phone, role, pin_hash)
+INSERT INTO users (id, name, flat_number, phone, role)
 VALUES
-    ('b1111111-0000-0000-0000-000000000001', 'Ramu Dhobi (Vendor)', 'VENDOR', '9876543210', 'vendor', 'Demo@1234'),
-    ('b1111111-0000-0000-0000-000000000002', 'Sharma Ji', 'A-1001', '9810011111', 'customer', 'Demo@1010'),
-    ('b1111111-0000-0000-0000-000000000003', 'Pooja Verma', 'A-2004', '9810022222', 'customer', 'Demo@2040'),
-    ('b1111111-0000-0000-0000-000000000004', 'Karthik Raja', 'B-3002', '9810033333', 'customer', 'Demo@3020'),
-    ('b1111111-0000-0000-0000-000000000005', 'Ananya Patel', 'C-4005', '9810044444', 'customer', 'Demo@4050')
+    ('b1111111-0000-0000-0000-000000000001', 'Ramu Dhobi (Vendor)', 'VENDOR', '9876543210', 'vendor'),
+    ('b1111111-0000-0000-0000-000000000002', 'Sharma Ji', 'A-1001', '9810011111', 'customer'),
+    ('b1111111-0000-0000-0000-000000000003', 'Pooja Verma', 'A-2004', '9810022222', 'customer'),
+    ('b1111111-0000-0000-0000-000000000004', 'Karthik Raja', 'B-3002', '9810033333', 'customer'),
+    ('b1111111-0000-0000-0000-000000000005', 'Ananya Patel', 'C-4005', '9810044444', 'customer')
 ON CONFLICT (flat_number) DO NOTHING;
 
 -- ------------------------------------------------------------------------------

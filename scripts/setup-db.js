@@ -10,7 +10,8 @@ const __dirname = path.dirname(__filename);
 
 const migrationFiles = [
   '../supabase/migrations/001_initial_schema.sql',
-  '../supabase/migrations/002_row_level_security.sql'
+  '../supabase/migrations/002_row_level_security.sql',
+  '../supabase/migrations/003_remove_pin_hash.sql'
 ];
 
 async function runSetup() {
@@ -66,6 +67,7 @@ async function runSetup() {
     console.log('2. In Supabase Dashboard -> SQL Editor, run:');
     console.log('   - supabase/migrations/001_initial_schema.sql (Initial tables & seeds)');
     console.log('   - supabase/migrations/002_row_level_security.sql (Row Level Security & Profiles)');
+    console.log('   - supabase/migrations/003_remove_pin_hash.sql (Drop pin_hash, vendor reset RPC)');
     console.log('3. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
   }
 

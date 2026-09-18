@@ -100,7 +100,6 @@ export const INITIAL_USERS: User[] = [
     flat_number: 'VENDOR',
     phone: '9876543210',
     role: 'vendor',
-    pin_hash: 'Demo@1234',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString()
   },
   {
@@ -109,7 +108,6 @@ export const INITIAL_USERS: User[] = [
     flat_number: 'A-1001',
     phone: '9810011111',
     role: 'customer',
-    pin_hash: 'Demo@1010',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString()
   },
   {
@@ -118,7 +116,6 @@ export const INITIAL_USERS: User[] = [
     flat_number: 'A-2004',
     phone: '9810022222',
     role: 'customer',
-    pin_hash: 'Demo@2040',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString()
   },
   {
@@ -127,7 +124,6 @@ export const INITIAL_USERS: User[] = [
     flat_number: 'B-3002',
     phone: '9810033333',
     role: 'customer',
-    pin_hash: 'Demo@3020',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString()
   },
   {
@@ -136,10 +132,19 @@ export const INITIAL_USERS: User[] = [
     flat_number: 'C-4005',
     phone: '9810044444',
     role: 'customer',
-    pin_hash: 'Demo@4050',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString()
   }
 ];
+
+// Fallback lookup ONLY used in pure offline demo mode with no Supabase project configured
+export const OFFLINE_DEMO_CREDENTIALS: Record<string, string> = {
+  'VENDOR': 'Demo@1234',
+  '9876543210': 'Demo@1234',
+  'A-1001': '1010',
+  'A-2004': '2040',
+  'B-3002': '3020',
+  'C-4005': '4050'
+};
 
 export const INITIAL_ORDERS: Order[] = [
   {
