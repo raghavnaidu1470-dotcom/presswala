@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { db } from '../services/db';
+import { db, toSyntheticAuthCredentials } from '../services/db';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -47,6 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    if (isSupabaseConfigured && supabase) {
+      supabase.auth.signOut().catch(err => console.warn('[PressWala] SignOut note:', err));
+    }
   };
 
   const registerResident = async (
@@ -64,6 +68,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const switchDemoUser = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+    if (isSupabaseConfigured && supabase) {
+      const client = supabase;
+      const { email, password } = toSyntheticAuthCredentials(user.flat_number, user.pin_hash, user.role);
+      client.auth.signInWithPassword({ email, password }).catch(() => {
+        // If demo user not yet in auth, sign up once
+        client.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              flat_number: user.flat_number,
+              role: user.role,
+              name: user.name,
+              phone: user.phone
+            }
+          }
+        }).then();
+      });
+    }
   };
 
   return (

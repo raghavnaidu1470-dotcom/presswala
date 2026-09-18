@@ -3,9 +3,10 @@
   "short_name": "PressWala",
   "description": "Ironing Vendor Order & Payment Tracker for Apartment Complexes",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "background_color": "#FAF9F6",
+  "theme_color": "#7BAE5C",
   "orientation": "portrait-primary",
   "icons": [
     {

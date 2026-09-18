@@ -28,6 +28,14 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  // Bypass caching for any external APIs (Supabase, Auth, etc.)
+  if (url.origin !== self.location.origin && 
+      !url.hostname.includes('fonts.gstatic.com') && 
+      !url.hostname.includes('fonts.googleapis.com')) {
+    return;
+  }
   
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {

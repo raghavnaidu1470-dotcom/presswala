@@ -17,6 +17,7 @@ import {
 } from './seedData';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { validators } from '../utils/validators';
+import { loginSecurity } from './loginSecurity';
 
 const STORAGE_KEYS = {
   GARMENTS: 'presswala_garments_v2',
@@ -25,6 +26,26 @@ const STORAGE_KEYS = {
   PAYMENTS: 'presswala_payments_v2',
   INITIALIZED: 'presswala_initialized_v2'
 };
+
+// ------------------------------------------------------------------------------
+// Synthetic Auth Helper (Under-the-hood Supabase Auth)
+// ------------------------------------------------------------------------------
+export function toSyntheticAuthCredentials(
+  loginKey: string, 
+  pin: string, 
+  role: 'customer' | 'vendor' = 'customer'
+) {
+  const cleanKey = loginKey.trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const isVendor = role === 'vendor' || cleanKey === 'vendor';
+  const email = isVendor 
+    ? 'vendor@presswala.internal' 
+    : `flat-${cleanKey}@presswala.internal`;
+  
+  // Supabase requires at least 6 characters for passwords.
+  // Deterministic salt wrapper ensures any 4-digit PIN or custom password satisfies Supabase.
+  const password = `PW#${pin.trim()}!AuthSecure`;
+  return { email, password, isVendor };
+}
 
 // ------------------------------------------------------------------------------
 // Local Storage Helpers
@@ -70,6 +91,14 @@ export const db = {
   async authenticateUser(loginKey: string, pin: string): Promise<User | null> {
     const trimmedKey = loginKey.trim().toUpperCase();
     const normalizedFlatKey = validators.normalizeFlatNumber(trimmedKey);
+
+    // 1. Check brute force lockout
+    const lockout = loginSecurity.checkLockout(trimmedKey);
+    if (lockout.isLocked) {
+      const mins = Math.ceil(lockout.remainingSeconds / 60);
+      throw new Error(`Too many failed login attempts for ${trimmedKey}. Locked for ${mins} minute(s). Please try again later.`);
+    }
+
     const users = loadFromStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
 
     const user = users.find(u => 
@@ -79,7 +108,69 @@ export const db = {
       u.pin_hash === pin.trim()
     );
 
-    return user || null;
+    if (!user) {
+      // Record failed attempt
+      const failedStatus = loginSecurity.recordFailedAttempt(trimmedKey);
+      if (failedStatus.isLocked) {
+        throw new Error(`Maximum login attempts exceeded. Account locked for 3 minutes.`);
+      }
+      return null;
+    }
+
+    // 2. Under-the-hood Supabase Auth session creation
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { email, password } = toSyntheticAuthCredentials(user.flat_number, pin, user.role);
+
+        // Try signing in to Supabase Auth
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (signInError) {
+          // If auth user doesn't exist yet on remote Supabase, provision once
+          if (signInError.message.includes('Invalid login credentials') || signInError.status === 400) {
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  flat_number: user.flat_number,
+                  role: user.role,
+                  name: user.name,
+                  phone: user.phone
+                }
+              }
+            });
+
+            if (!signUpError && signUpData.user) {
+              // Ensure profile is mapped
+              await supabase.from('profiles').upsert({
+                id: signUpData.user.id,
+                flat_number: user.flat_number,
+                role: user.role,
+                user_id: user.id
+              });
+            }
+          }
+        } else if (signInData.user) {
+          // Profile verification/sync
+          await supabase.from('profiles').upsert({
+            id: signInData.user.id,
+            flat_number: user.flat_number,
+            role: user.role,
+            user_id: user.id
+          });
+        }
+      } catch (authErr) {
+        console.warn('[PressWala Auth] Background Supabase Auth sync note:', authErr);
+      }
+    }
+
+    // Clear lockout on successful authentication
+    loginSecurity.clearLockout(trimmedKey);
+    return user;
   },
 
   async getUserByPhone(phone: string): Promise<User | null> {
@@ -116,9 +207,36 @@ export const db = {
     users.push(newUser);
     saveToStorage(STORAGE_KEYS.USERS, users);
 
-    // Sync to Supabase if configured
+    // Sync to Supabase Auth & DB if configured
     if (isSupabaseConfigured && supabase) {
-      supabase.from('users').insert(newUser).then();
+      try {
+        const { email, password } = toSyntheticAuthCredentials(normalizedFlat, pin, 'customer');
+        const { data: authData } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              flat_number: normalizedFlat,
+              role: 'customer',
+              name: newUser.name,
+              phone: newUser.phone
+            }
+          }
+        });
+
+        await supabase.from('users').insert(newUser);
+
+        if (authData.user) {
+          await supabase.from('profiles').upsert({
+            id: authData.user.id,
+            flat_number: normalizedFlat,
+            role: 'customer',
+            user_id: newUser.id
+          });
+        }
+      } catch (err) {
+        console.warn('[PressWala] Error syncing new resident to Supabase:', err);
+      }
     }
 
     return newUser;
@@ -139,6 +257,14 @@ export const db = {
     // Sync to Supabase if configured
     if (isSupabaseConfigured && supabase) {
       await supabase.from('users').update({ pin_hash: newPin.trim() }).eq('phone', trimmedPhone);
+      // Reset synthetic auth password if user can be identified
+      try {
+        const user = users[userIndex];
+        const { password } = toSyntheticAuthCredentials(user.flat_number, newPin, user.role);
+        await supabase.auth.updateUser({ password });
+      } catch (err) {
+        console.warn('[PressWala] Supabase Auth password update note:', err);
+      }
     }
 
     return true;
@@ -193,6 +319,31 @@ export const db = {
 
   // 3. Orders
   async getOrders(filters?: { flatNumber?: string; status?: string; paymentStatus?: string }): Promise<Order[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let query = supabase
+          .from('orders')
+          .select('*, items:order_items(*)');
+
+        if (filters?.flatNumber) {
+          query = query.ilike('flat_number', filters.flatNumber.trim());
+        }
+        if (filters?.status && filters.status !== 'all') {
+          query = query.eq('status', filters.status);
+        }
+        if (filters?.paymentStatus && filters.paymentStatus !== 'all') {
+          query = query.eq('payment_status', filters.paymentStatus);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data as Order[];
+        }
+      } catch (err) {
+        console.warn('[PressWala] Supabase getOrders note:', err);
+      }
+    }
+
     let orders = loadFromStorage<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
 
     if (filters?.flatNumber) {

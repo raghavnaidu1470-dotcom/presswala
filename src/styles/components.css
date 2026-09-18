@@ -688,13 +688,28 @@
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12);
   padding: 2rem;
   display: flex;
   flex-direction: column;
   animation: modal-enter 200ms ease-out;
   color: #1A1A1A;
+}
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-end;
+  }
+  .modal-content {
+    border-radius: 20px 20px 0 0;
+    max-height: 88dvh;
+    padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+  }
 }
 
 @keyframes modal-enter {
@@ -842,15 +857,18 @@
 }
 
 .stepper-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-xs);
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-surface-elevated);
   color: var(--text-primary);
   transition: all var(--transition-fast);
+  touch-action: manipulation;
 }
 
 .stepper-btn:hover:not(:disabled) {
@@ -864,10 +882,23 @@
 }
 
 .stepper-value {
-  width: 24px;
+  width: 28px;
   text-align: center;
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .stepper-btn {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+  }
+  .stepper-value {
+    min-width: 30px;
+    font-size: 1.05rem;
+  }
 }
 
 /* Sticky Bottom Summary Bar (Order Creator) */

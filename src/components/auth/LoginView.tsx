@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_USERS } from '../../services/seedData';
 import { User } from '../../types';
 import { db } from '../../services/db';
 import { validators } from '../../utils/validators';
+import { loginSecurity } from '../../services/loginSecurity';
 import { 
   Building2, 
   Sparkles, 
@@ -13,7 +14,8 @@ import {
   ShieldCheck,
   Zap,
   KeyRound,
-  MessageSquare
+  MessageSquare,
+  Clock
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
@@ -42,14 +44,45 @@ export const LoginView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lockoutRemaining, setLockoutRemaining] = useState<number>(0);
 
   const apartmentName = import.meta.env.VITE_APARTMENT_NAME || 'Palm Heights Apartments';
+
+  // Check lockout on active key change
+  useEffect(() => {
+    const key = activeTab === 'resident' ? flatNumber : activeTab === 'vendor' ? vendorKey : '';
+    if (key) {
+      const status = loginSecurity.checkLockout(key);
+      if (status.isLocked) {
+        setLockoutRemaining(status.remainingSeconds);
+        setError(`Too many failed attempts. Account locked. Try again in ${Math.ceil(status.remainingSeconds / 60)}m ${status.remainingSeconds % 60}s.`);
+      } else {
+        setLockoutRemaining(0);
+      }
+    }
+  }, [flatNumber, vendorKey, activeTab]);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutRemaining <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutRemaining(prev => {
+        if (prev <= 1) {
+          setError(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutRemaining]);
 
   const switchTab = (tab: 'resident' | 'vendor' | 'register' | 'forgot') => {
     setActiveTab(tab);
     setError(null);
     setSuccessMsg(null);
     setForgotStep(1);
+    setLockoutRemaining(0);
   };
 
   const handleResidentLogin = async (e: React.FormEvent) => {
@@ -67,13 +100,30 @@ export const LoginView: React.FC = () => {
       return;
     }
 
+    const lockout = loginSecurity.checkLockout(normalizedFlat);
+    if (lockout.isLocked) {
+      setLockoutRemaining(lockout.remainingSeconds);
+      setError(`Too many failed attempts. Account temporarily locked for ${Math.ceil(lockout.remainingSeconds / 60)} minute(s).`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const success = await login(normalizedFlat, pin);
       if (!success) {
-        setError('Invalid Flat Number or Password.');
+        const afterStatus = loginSecurity.checkLockout(normalizedFlat);
+        if (afterStatus.isLocked) {
+          setLockoutRemaining(afterStatus.remainingSeconds);
+          setError(`Too many failed attempts. Account locked for 3 minutes.`);
+        } else {
+          setError(`Invalid Flat Number or Password. (${afterStatus.attemptsLeft} attempt(s) remaining before lockout)`);
+        }
       }
     } catch (err: any) {
+      const afterStatus = loginSecurity.checkLockout(normalizedFlat);
+      if (afterStatus.isLocked) {
+        setLockoutRemaining(afterStatus.remainingSeconds);
+      }
       setError(err.message || 'Login failed');
     } finally {
       setIsSubmitting(false);
@@ -87,13 +137,31 @@ export const LoginView: React.FC = () => {
       setError('Please enter Vendor ID and Password');
       return;
     }
+
+    const lockout = loginSecurity.checkLockout(vendorKey);
+    if (lockout.isLocked) {
+      setLockoutRemaining(lockout.remainingSeconds);
+      setError(`Too many failed attempts. Vendor account locked for ${Math.ceil(lockout.remainingSeconds / 60)} minute(s).`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const success = await login(vendorKey, vendorPin);
       if (!success) {
-        setError('Invalid Vendor ID or Password. Default is VENDOR / Demo@1234');
+        const afterStatus = loginSecurity.checkLockout(vendorKey);
+        if (afterStatus.isLocked) {
+          setLockoutRemaining(afterStatus.remainingSeconds);
+          setError(`Too many failed attempts. Vendor account locked for 3 minutes.`);
+        } else {
+          setError(`Invalid Vendor ID or Password. (${afterStatus.attemptsLeft} attempt(s) remaining)`);
+        }
       }
     } catch (err: any) {
+      const afterStatus = loginSecurity.checkLockout(vendorKey);
+      if (afterStatus.isLocked) {
+        setLockoutRemaining(afterStatus.remainingSeconds);
+      }
       setError(err.message || 'Login failed');
     } finally {
       setIsSubmitting(false);
@@ -547,10 +615,17 @@ export const LoginView: React.FC = () => {
               <button
                 type="submit"
                 className="login-btn"
-                disabled={isSubmitting}
+                disabled={isSubmitting || lockoutRemaining > 0}
+                style={lockoutRemaining > 0 ? { opacity: 0.6, cursor: 'not-allowed', background: '#9CA3AF' } : {}}
               >
-                <span>{isSubmitting ? 'Verifying...' : 'Sign In as Resident'}</span>
-                <ArrowRight size={20} />
+                <span>
+                  {lockoutRemaining > 0 
+                    ? `Locked (${Math.floor(lockoutRemaining / 60)}m ${lockoutRemaining % 60}s)` 
+                    : isSubmitting 
+                    ? 'Verifying...' 
+                    : 'Sign In as Resident'}
+                </span>
+                {lockoutRemaining > 0 ? <Clock size={20} /> : <ArrowRight size={20} />}
               </button>
               
               <button type="button" className="forgot-link" onClick={() => switchTab('forgot')}>
@@ -587,10 +662,17 @@ export const LoginView: React.FC = () => {
               <button
                 type="submit"
                 className="login-btn"
-                disabled={isSubmitting}
+                disabled={isSubmitting || lockoutRemaining > 0}
+                style={lockoutRemaining > 0 ? { opacity: 0.6, cursor: 'not-allowed', background: '#9CA3AF' } : {}}
               >
-                <ShieldCheck size={20} />
-                <span>{isSubmitting ? 'Verifying...' : 'Access Vendor Dashboard'}</span>
+                {lockoutRemaining > 0 ? <Clock size={20} /> : <ShieldCheck size={20} />}
+                <span>
+                  {lockoutRemaining > 0 
+                    ? `Locked (${Math.floor(lockoutRemaining / 60)}m ${lockoutRemaining % 60}s)` 
+                    : isSubmitting 
+                    ? 'Verifying...' 
+                    : 'Access Vendor Dashboard'}
+                </span>
               </button>
             </form>
           )}
