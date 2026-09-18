@@ -20,6 +20,8 @@ A responsive, zero-cost Progressive Web App (PWA) designed for local cloth-ironi
 - **Dual-Storage Engine**:
   - Runs out of the box with persistent local storage (seeded with realistic apartment data).
   - Connects to Supabase PostgreSQL in real-time when environment variables are set.
+- **Vendor Onboarding**:
+  - Includes a printable, step-by-step handbook: [docs/VENDOR_QUICK_GUIDE.md](docs/VENDOR_QUICK_GUIDE.md).
 
 ---
 
