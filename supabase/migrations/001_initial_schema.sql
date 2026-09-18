@@ -134,30 +134,30 @@ SET price = EXCLUDED.price, name = EXCLUDED.name, category = EXCLUDED.category;
 -- ------------------------------------------------------------------------------
 INSERT INTO users (id, name, flat_number, phone, role, pin_hash)
 VALUES
-    ('b1111111-0000-0000-0000-000000000001', 'Ramu Dhobi (Vendor)', 'VENDOR', '9876543210', 'vendor', '1234'),
-    ('b1111111-0000-0000-0000-000000000002', 'Sharma Ji', 'A-101', '9810011111', 'customer', '1010'),
-    ('b1111111-0000-0000-0000-000000000003', 'Pooja Verma', 'A-204', '9810022222', 'customer', '2040'),
-    ('b1111111-0000-0000-0000-000000000004', 'Karthik Raja', 'B-302', '9810033333', 'customer', '3020'),
-    ('b1111111-0000-0000-0000-000000000005', 'Ananya Patel', 'C-405', '9810044444', 'customer', '4050')
+    ('b1111111-0000-0000-0000-000000000001', 'Ramu Dhobi (Vendor)', 'VENDOR', '9876543210', 'vendor', 'Demo@1234'),
+    ('b1111111-0000-0000-0000-000000000002', 'Sharma Ji', 'A-1001', '9810011111', 'customer', 'Demo@1010'),
+    ('b1111111-0000-0000-0000-000000000003', 'Pooja Verma', 'A-2004', '9810022222', 'customer', 'Demo@2040'),
+    ('b1111111-0000-0000-0000-000000000004', 'Karthik Raja', 'B-3002', '9810033333', 'customer', 'Demo@3020'),
+    ('b1111111-0000-0000-0000-000000000005', 'Ananya Patel', 'C-4005', '9810044444', 'customer', 'Demo@4050')
 ON CONFLICT (flat_number) DO NOTHING;
 
 -- ------------------------------------------------------------------------------
 -- 10. Seed Demo Orders (Active, Completed & Outstanding Unpaid)
 -- ------------------------------------------------------------------------------
--- Order 1: New order placed by A-101 (Ready for pickup)
+-- Order 1: New order placed by A-1001 (Ready for pickup)
 INSERT INTO orders (id, order_number, customer_id, flat_number, customer_name, customer_phone, status, payment_status, total_amount, paid_amount, special_instructions)
 VALUES (
     'c1111111-0000-0000-0000-000000000001',
     'PW-1001',
     'b1111111-0000-0000-0000-000000000002',
-    'A-101',
+    'A-1001',
     'Sharma Ji',
     '9810011111',
     'created',
     'unpaid',
     54.00,
     0.00,
-    'Please pick up from door hook outside A-101'
+    'Please pick up from door hook outside A-1001'
 ) ON CONFLICT (order_number) DO NOTHING;
 
 INSERT INTO order_items (order_id, garment_type_id, garment_name, unit_price, quantity, subtotal)
@@ -166,13 +166,13 @@ VALUES
     ('c1111111-0000-0000-0000-000000000001', 'a1111111-0000-0000-0000-000000000002', 'Pant / Trousers / Jeans', 12.00, 2, 24.00)
 ON CONFLICT DO NOTHING;
 
--- Order 2: Delivered but UNPAID for A-204 (Demonstrates the critical problem: pending revenue!)
+-- Order 2: Delivered but UNPAID for A-2004 (Demonstrates the critical problem: pending revenue!)
 INSERT INTO orders (id, order_number, customer_id, flat_number, customer_name, customer_phone, status, payment_status, total_amount, paid_amount, special_instructions, delivered_at)
 VALUES (
     'c1111111-0000-0000-0000-000000000002',
     'PW-1002',
     'b1111111-0000-0000-0000-000000000003',
-    'A-204',
+    'A-2004',
     'Pooja Verma',
     '9810022222',
     'delivered',
@@ -189,13 +189,13 @@ VALUES
     ('c1111111-0000-0000-0000-000000000002', 'a1111111-0000-0000-0000-000000000005', 'Saree (Silk / Heavy Embroidery)', 70.00, 1, 70.00)
 ON CONFLICT DO NOTHING;
 
--- Order 3: Completed & PAID order for B-302
+-- Order 3: Completed & PAID order for B-3002
 INSERT INTO orders (id, order_number, customer_id, flat_number, customer_name, customer_phone, status, payment_status, total_amount, paid_amount, special_instructions, delivered_at)
 VALUES (
     'c1111111-0000-0000-0000-000000000003',
     'PW-1003',
     'b1111111-0000-0000-0000-000000000004',
-    'B-302',
+    'B-3002',
     'Karthik Raja',
     '9810033333',
     'delivered',
@@ -216,7 +216,7 @@ INSERT INTO payments (order_id, customer_id, flat_number, amount, payment_method
 VALUES (
     'c1111111-0000-0000-0000-000000000003',
     'b1111111-0000-0000-0000-000000000004',
-    'B-302',
+    'B-3002',
     80.00,
     'upi',
     'UPI/729182749182',

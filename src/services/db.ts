@@ -16,13 +16,14 @@ import {
   INITIAL_PAYMENTS 
 } from './seedData';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { validators } from '../utils/validators';
 
 const STORAGE_KEYS = {
-  GARMENTS: 'presswala_garments_v1',
-  USERS: 'presswala_users_v1',
-  ORDERS: 'presswala_orders_v1',
-  PAYMENTS: 'presswala_payments_v1',
-  INITIALIZED: 'presswala_initialized_v1'
+  GARMENTS: 'presswala_garments_v2',
+  USERS: 'presswala_users_v2',
+  ORDERS: 'presswala_orders_v2',
+  PAYMENTS: 'presswala_payments_v2',
+  INITIALIZED: 'presswala_initialized_v2'
 };
 
 // ------------------------------------------------------------------------------
@@ -57,7 +58,7 @@ export function initializeDatabase(): void {
     saveToStorage(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
     saveToStorage(STORAGE_KEYS.PAYMENTS, INITIAL_PAYMENTS);
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
-    console.log('[PressWala DB] Seed data initialized successfully');
+    console.log('[PressWala DB] Seed data initialized successfully (v2)');
   }
 }
 
@@ -65,33 +66,48 @@ export function initializeDatabase(): void {
 // Database Service Interface
 // ------------------------------------------------------------------------------
 export const db = {
-  // 1. Authentication
+  // 1. Authentication & Users
   async authenticateUser(loginKey: string, pin: string): Promise<User | null> {
     const trimmedKey = loginKey.trim().toUpperCase();
+    const normalizedFlatKey = validators.normalizeFlatNumber(trimmedKey);
     const users = loadFromStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
 
     const user = users.find(u => 
-      (u.flat_number.toUpperCase() === trimmedKey || u.phone === trimmedKey) && 
+      (u.flat_number.toUpperCase() === trimmedKey || 
+       u.flat_number.toUpperCase() === normalizedFlatKey || 
+       u.phone === trimmedKey) && 
       u.pin_hash === pin.trim()
     );
 
     return user || null;
   },
 
+  async getUserByPhone(phone: string): Promise<User | null> {
+    const users = loadFromStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const trimmedPhone = phone.trim();
+    return users.find(u => u.phone === trimmedPhone) || null;
+  },
+
   async registerResident(name: string, flatNumber: string, phone: string, pin: string): Promise<User> {
     const users = loadFromStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-    const trimmedFlat = flatNumber.trim().toUpperCase();
+    const normalizedFlat = validators.normalizeFlatNumber(flatNumber.trim());
+    const trimmedPhone = phone.trim();
 
-    const existing = users.find(u => u.flat_number.toUpperCase() === trimmedFlat);
-    if (existing) {
-      throw new Error(`Flat ${trimmedFlat} is already registered. Please login using your PIN.`);
+    const existingFlat = users.find(u => u.flat_number.toUpperCase() === normalizedFlat.toUpperCase());
+    if (existingFlat) {
+      throw new Error(`Flat ${normalizedFlat} is already registered. Please login using your Password.`);
+    }
+
+    const existingPhone = users.find(u => u.phone === trimmedPhone);
+    if (existingPhone) {
+      throw new Error(`Mobile number ${trimmedPhone} is already registered for flat ${existingPhone.flat_number}.`);
     }
 
     const newUser: User = {
       id: crypto.randomUUID ? crypto.randomUUID() : `usr-${Date.now()}`,
       name: name.trim(),
-      flat_number: trimmedFlat,
-      phone: phone.trim(),
+      flat_number: normalizedFlat,
+      phone: trimmedPhone,
       role: 'customer',
       pin_hash: pin.trim(),
       created_at: new Date().toISOString()
@@ -106,6 +122,26 @@ export const db = {
     }
 
     return newUser;
+  },
+
+  async resetPassword(phone: string, newPin: string): Promise<boolean> {
+    const users = loadFromStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const trimmedPhone = phone.trim();
+
+    const userIndex = users.findIndex(u => u.phone === trimmedPhone);
+    if (userIndex === -1) {
+      throw new Error(`No account found with phone number ${trimmedPhone}`);
+    }
+
+    users[userIndex].pin_hash = newPin.trim();
+    saveToStorage(STORAGE_KEYS.USERS, users);
+
+    // Sync to Supabase if configured
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('users').update({ pin_hash: newPin.trim() }).eq('phone', trimmedPhone);
+    }
+
+    return true;
   },
 
   // 2. Garment Catalog

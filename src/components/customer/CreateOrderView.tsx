@@ -18,6 +18,8 @@ import {
   FileText
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
+import { AnimatedNumber } from '../common/AnimatedNumber';
+import { Skeleton } from '../common/Skeleton';
 
 interface CreateOrderViewProps {
   onOrderCreated: (newOrder: Order) => void;
@@ -26,15 +28,15 @@ interface CreateOrderViewProps {
 // Map icon string to Lucide icon
 function renderGarmentIcon(iconName: string) {
   switch (iconName) {
-    case 'shirt': return <Shirt size={20} />;
-    case 'sparkles': return <Sparkles size={20} />;
-    case 'crown': return <Crown size={20} />;
-    case 'bed': return <Bed size={20} />;
-    case 'bed-double': return <Bed size={20} />;
-    case 'briefcase': return <Briefcase size={20} />;
-    case 'layers': return <Layers size={20} />;
-    case 'palette': return <Palette size={20} />;
-    default: return <Shirt size={20} />;
+    case 'shirt': return <Shirt size={22} />;
+    case 'sparkles': return <Sparkles size={22} />;
+    case 'crown': return <Crown size={22} />;
+    case 'bed': return <Bed size={22} />;
+    case 'bed-double': return <Bed size={22} />;
+    case 'briefcase': return <Briefcase size={22} />;
+    case 'layers': return <Layers size={22} />;
+    case 'palette': return <Palette size={22} />;
+    default: return <Shirt size={22} />;
   }
 }
 
@@ -45,11 +47,13 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadGarments() {
       const items = await db.getGarmentTypes();
       setGarments(items);
+      setIsLoading(false);
     }
     loadGarments();
   }, []);
@@ -116,36 +120,71 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
   };
 
   return (
-    <div style={{ paddingBottom: '90px' }}>
+    <div style={{ paddingBottom: '120px' }}>
       {/* Page Title & Instructions */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.25rem' }}>
+      <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+        <h2 className="customer-heading" style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.35rem' }}>
           Select Clothes for Ironing
         </h2>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-          Pick quantity for each garment type. Your order total calculates automatically.
+        <p style={{ fontSize: '0.9rem', color: 'var(--customer-muted)' }}>
+          Pick the quantity for each garment type. Your order total calculates automatically.
         </p>
       </div>
 
       {/* Garments Grid */}
-      <div className="garments-grid">
-        {garments.map(garment => {
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+        gap: '1rem',
+        marginBottom: '2rem'
+      }}>
+        {isLoading && (
+          <>
+            <Skeleton height="100px" borderRadius="20px" />
+            <Skeleton height="100px" borderRadius="20px" />
+            <Skeleton height="100px" borderRadius="20px" />
+            <Skeleton height="100px" borderRadius="20px" />
+          </>
+        )}
+        
+        {!isLoading && garments.map(garment => {
           const qty = quantities[garment.id] || 0;
+          const isSelected = qty > 0;
+          
           return (
             <div 
               key={garment.id} 
-              className={`garment-card ${qty > 0 ? 'has-quantity' : ''}`}
+              className="customer-card"
+              style={{ 
+                padding: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                transition: 'all 200ms ease',
+                border: isSelected ? '1px solid var(--customer-accent)' : '1px solid var(--customer-border)',
+                background: isSelected ? 'var(--status-sage-bg)' : 'var(--customer-surface)',
+                boxShadow: isSelected ? '0 8px 24px rgba(123, 174, 92, 0.15)' : '0 4px 12px rgba(0,0,0,0.03)'
+              }}
             >
-              <div className="garment-info">
-                <div className="garment-icon-bubble">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ 
+                  width: '48px', height: '48px', borderRadius: '16px',
+                  background: isSelected ? 'var(--customer-accent)' : '#F6F5F2',
+                  color: isSelected ? '#FFFFFF' : 'var(--customer-muted)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 200ms ease'
+                }}>
                   {renderGarmentIcon(garment.icon)}
                 </div>
+                
                 <div>
-                  <div className="garment-name">{garment.name}</div>
-                  <div className="garment-price-rate">
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--customer-text)', marginBottom: '0.15rem' }}>
+                    {garment.name}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--customer-muted)', display: 'flex', alignItems: 'center' }}>
                     ₹{garment.price} / pc
-                    {qty > 0 && (
-                      <span style={{ color: 'var(--primary-500)', fontWeight: 700, marginLeft: '6px' }}>
+                    {isSelected && (
+                      <span style={{ color: '#557A3C', fontWeight: 700, marginLeft: '6px', fontSize: '0.8rem' }}>
                         • ₹{qty * garment.price}
                       </span>
                     )}
@@ -153,25 +192,54 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
                 </div>
               </div>
 
-              {/* Quantity Stepper */}
-              <div className="stepper-control">
+              {/* Tactile Pill-Shaped Stepper */}
+              <div style={{ 
+                display: 'flex', alignItems: 'center', background: '#FFFFFF', 
+                border: '1px solid var(--customer-border)', borderRadius: '9999px',
+                padding: '0.25rem', gap: '0.5rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}>
                 <button
                   type="button"
-                  className="stepper-btn"
                   onClick={() => handleDecrement(garment.id)}
                   disabled={qty === 0}
-                  aria-label="Decrease quantity"
+                  style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    background: qty > 0 ? '#F6F5F2' : 'transparent',
+                    color: qty > 0 ? 'var(--customer-text)' : 'var(--customer-border)',
+                    border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: qty > 0 ? 'pointer' : 'default',
+                    transition: 'all 150ms ease'
+                  }}
+                  onMouseOver={(e) => qty > 0 && (e.currentTarget.style.background = '#EBE8E0')}
+                  onMouseOut={(e) => qty > 0 && (e.currentTarget.style.background = '#F6F5F2')}
                 >
-                  <Minus size={14} />
+                  <Minus size={16} />
                 </button>
-                <span className="stepper-value">{qty}</span>
+                
+                <span style={{ 
+                  width: '16px', textAlign: 'center', fontSize: '1rem', 
+                  fontWeight: 700, color: 'var(--customer-text)',
+                  fontFamily: 'Outfit, sans-serif'
+                }}>
+                  {qty}
+                </span>
+                
                 <button
                   type="button"
-                  className="stepper-btn"
                   onClick={() => handleIncrement(garment.id)}
-                  aria-label="Increase quantity"
+                  style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    background: 'var(--status-sage-bg)',
+                    color: '#557A3C',
+                    border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 150ms ease'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'var(--customer-accent)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'var(--status-sage-bg)'}
                 >
-                  <Plus size={14} />
+                  <Plus size={16} />
                 </button>
               </div>
             </div>
@@ -181,12 +249,10 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
 
       {/* Special Instructions */}
       <div 
+        className="customer-card"
         style={{ 
-          background: 'var(--bg-surface)', 
-          border: '1px solid var(--border-subtle)', 
-          borderRadius: 'var(--radius-md)', 
-          padding: '1rem',
-          marginBottom: '1.5rem'
+          padding: '1.5rem',
+          marginBottom: '2rem'
         }}
       >
         <label 
@@ -195,13 +261,13 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
             display: 'flex', 
             alignItems: 'center', 
             gap: '0.4rem', 
-            fontSize: '0.8125rem', 
+            fontSize: '0.85rem', 
             fontWeight: 700, 
-            color: 'var(--text-secondary)', 
-            marginBottom: '0.5rem' 
+            color: 'var(--customer-text)', 
+            marginBottom: '0.75rem' 
           }}
         >
-          <FileText size={15} />
+          <FileText size={16} color="var(--customer-muted)" />
           Special Instructions (Optional)
         </label>
         <textarea
@@ -212,39 +278,76 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
           onChange={(e) => setSpecialInstructions(e.target.value)}
           style={{
             width: '100%',
-            padding: '0.65rem',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-subtle)',
-            color: 'var(--text-primary)',
-            fontSize: '0.875rem',
-            resize: 'none'
+            padding: '1rem',
+            borderRadius: '16px',
+            background: '#F6F5F2',
+            border: '1px solid transparent',
+            color: 'var(--customer-text)',
+            fontSize: '0.95rem',
+            fontFamily: 'inherit',
+            resize: 'none',
+            transition: 'all 200ms ease'
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.background = '#FFFFFF';
+            e.currentTarget.style.borderColor = 'var(--customer-accent)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.background = '#F6F5F2';
+            e.currentTarget.style.borderColor = 'transparent';
           }}
         />
       </div>
 
       {/* Sticky Bottom Order Bar */}
-      <div className="order-sticky-bar">
-        <div className="order-sticky-inner">
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: 'rgba(255, 255, 255, 0.85)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: '1px solid var(--customer-border)',
+        padding: '1rem',
+        zIndex: 50,
+        boxShadow: '0 -10px 40px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{
+          maxWidth: '800px', margin: '0 auto',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--customer-muted)', fontWeight: 600, marginBottom: '0.2rem' }}>
               {totalItemsCount === 0 ? 'No garments selected' : `${totalItemsCount} Garments Selected`}
             </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              ₹{totalCost}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.2rem' }}>
+              <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--customer-text)', fontFamily: 'Outfit, sans-serif' }}>₹</span>
+              <AnimatedNumber 
+                value={totalCost} 
+                style={{ 
+                  fontSize: '1.75rem', 
+                  fontWeight: 800, 
+                  color: 'var(--customer-text)',
+                  fontFamily: 'Outfit, sans-serif'
+                }} 
+              />
             </div>
           </div>
 
           <button
             type="button"
-            className="btn btn-primary btn-lg"
+            className="customer-btn customer-btn-primary"
             onClick={handlePlaceOrder}
             disabled={totalItemsCount === 0 || isSubmitting}
-            style={{ minWidth: '180px' }}
+            style={{ 
+              minWidth: '180px',
+              padding: '1rem 1.5rem',
+              fontSize: '1.05rem',
+              opacity: totalItemsCount === 0 ? 0.6 : 1,
+              cursor: totalItemsCount === 0 ? 'not-allowed' : 'pointer'
+            }}
           >
             <ShoppingBag size={18} />
             <span>{isSubmitting ? 'Placing Order...' : 'Place Order'}</span>
-            <ArrowRight size={16} />
+            <ArrowRight size={18} />
           </button>
         </div>
       </div>
@@ -257,58 +360,59 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
           title="Order Confirmed!"
           hideCloseButton
         >
-          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+          <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--customer-text)' }}>
             <div 
               style={{ 
-                width: '64px', 
-                height: '64px', 
+                width: '80px', 
+                height: '80px', 
                 borderRadius: '50%', 
-                background: 'var(--success-subtle)', 
-                color: 'var(--success-color)',
+                background: 'var(--status-sage-bg)', 
+                color: '#557A3C',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: '1rem'
+                marginBottom: '1.5rem',
+                boxShadow: '0 0 0 10px rgba(142, 168, 110, 0.05)'
               }}
             >
-              <CheckCircle2 size={36} />
+              <CheckCircle2 size={40} />
             </div>
 
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.25rem' }}>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem', fontFamily: 'Outfit' }}>
               Order {createdOrder.order_number} Received!
             </h3>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+            <p style={{ fontSize: '0.95rem', color: 'var(--customer-muted)', marginBottom: '1.5rem' }}>
               Ramu Dhobi has been notified and will collect your clothes shortly.
             </p>
 
             <div 
               style={{ 
-                background: 'var(--bg-input)', 
-                borderRadius: 'var(--radius-md)', 
-                padding: '1rem',
+                background: '#F6F5F2', 
+                borderRadius: '16px', 
+                padding: '1.25rem',
                 textAlign: 'left',
-                marginBottom: '1.25rem'
+                marginBottom: '1.5rem'
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8125rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Flat Number</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--customer-muted)' }}>Flat Number</span>
                 <span style={{ fontWeight: 700 }}>Flat {createdOrder.flat_number}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.8125rem' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Total Clothes</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--customer-muted)' }}>Total Clothes</span>
                 <span style={{ fontWeight: 700 }}>{totalItemsCount} items</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: 800, paddingTop: '0.5rem', borderTop: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, paddingTop: '0.75rem', borderTop: '1px solid var(--customer-border)' }}>
                 <span>Estimated Total</span>
-                <span style={{ color: 'var(--accent-primary)' }}>₹{createdOrder.total_amount}</span>
+                <span style={{ color: 'var(--customer-accent)' }}>₹{createdOrder.total_amount}</span>
               </div>
             </div>
 
             <button
               type="button"
-              className="btn btn-primary btn-lg"
+              className="customer-btn customer-btn-primary"
               onClick={handleCloseConfirmation}
-              style={{ width: '100%' }}
+              style={{ width: '100%', padding: '1rem', fontSize: '1.05rem' }}
             >
               <span>View in My Orders</span>
             </button>

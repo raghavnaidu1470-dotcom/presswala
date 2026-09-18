@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_USERS } from '../../services/seedData';
 import { User } from '../../types';
+import { db } from '../../services/db';
+import { validators } from '../../utils/validators';
 import { 
   Building2, 
   Sparkles, 
@@ -9,19 +11,21 @@ import {
   ArrowRight, 
   AlertCircle,
   ShieldCheck,
-  Zap
+  Zap,
+  KeyRound,
+  MessageSquare
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
   const { login, registerResident, switchDemoUser } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'resident' | 'vendor' | 'register'>('resident');
+  const [activeTab, setActiveTab] = useState<'resident' | 'vendor' | 'register' | 'forgot'>('resident');
   
   // Resident / Vendor Form State
   const [flatNumber, setFlatNumber] = useState('');
   const [pin, setPin] = useState('');
   const [vendorKey, setVendorKey] = useState('VENDOR');
-  const [vendorPin, setVendorPin] = useState('1234');
+  const [vendorPin, setVendorPin] = useState('Demo@1234');
 
   // Register Form State
   const [regName, setRegName] = useState('');
@@ -29,23 +33,45 @@ export const LoginView: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regPin, setRegPin] = useState('');
 
+  // Forgot Password State
+  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPin, setForgotNewPin] = useState('');
+
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const apartmentName = import.meta.env.VITE_APARTMENT_NAME || 'Palm Heights Apartments';
+
+  const switchTab = (tab: 'resident' | 'vendor' | 'register' | 'forgot') => {
+    setActiveTab(tab);
+    setError(null);
+    setSuccessMsg(null);
+    setForgotStep(1);
+  };
 
   const handleResidentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!flatNumber.trim() || !pin.trim()) {
-      setError('Please enter both your Flat Number and PIN');
+      setError('Please enter both your Flat Number and Password');
       return;
     }
+    
+    // Normalize and validate format
+    const normalizedFlat = validators.normalizeFlatNumber(flatNumber);
+    if (!validators.isValidFlatNumber(normalizedFlat)) {
+      setError('Invalid Flat format. Expected format: S-3907 or A-1001');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const success = await login(flatNumber, pin);
+      const success = await login(normalizedFlat, pin);
       if (!success) {
-        setError('Invalid Flat Number or PIN. For demo flats, check the Demo Switcher below.');
+        setError('Invalid Flat Number or Password.');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -58,14 +84,14 @@ export const LoginView: React.FC = () => {
     e.preventDefault();
     setError(null);
     if (!vendorKey.trim() || !vendorPin.trim()) {
-      setError('Please enter Vendor ID and PIN');
+      setError('Please enter Vendor ID and Password');
       return;
     }
     setIsSubmitting(true);
     try {
       const success = await login(vendorKey, vendorPin);
       if (!success) {
-        setError('Invalid Vendor ID or PIN. Default is VENDOR / 1234');
+        setError('Invalid Vendor ID or Password. Default is VENDOR / Demo@1234');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -81,17 +107,91 @@ export const LoginView: React.FC = () => {
       setError('Please fill in all fields');
       return;
     }
-    if (regPin.length < 4) {
-      setError('PIN should be at least 4 digits');
+    
+    if (!validators.isValidName(regName)) {
+      setError('Name can only contain alphabets and spaces (minimum 2 characters)');
       return;
     }
+    
+    const normalizedFlat = validators.normalizeFlatNumber(regFlat);
+    if (!validators.isValidFlatNumber(normalizedFlat)) {
+      setError('Flat number must be an alphabet, a hyphen, and 4 digits (e.g., S-3907 or A-1001)');
+      return;
+    }
+    
+    if (!validators.isValidPhone(regPhone)) {
+      setError('Phone number must be exactly 10 digits');
+      return;
+    }
+    
+    if (!validators.isValidPassword(regPin)) {
+      setError('Password must be min 6 characters and include an uppercase, lowercase, digit, and special character');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await registerResident(regName, regFlat, regPhone, regPin);
+      await registerResident(regName, normalizedFlat, regPhone, regPin);
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+
+    if (forgotStep === 1) {
+      if (!validators.isValidPhone(forgotPhone)) {
+        setError('Phone number must be exactly 10 digits');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        const user = await db.getUserByPhone(forgotPhone);
+        if (!user) {
+          setError(`No account found with phone number ${forgotPhone}. Please register first.`);
+          setIsSubmitting(false);
+          return;
+        }
+        setTimeout(() => {
+          setIsSubmitting(false);
+          setForgotStep(2);
+          setSuccessMsg('OTP sent to your phone! (For demo, use any 4 digits like 1234)');
+        }, 600);
+      } catch (err: any) {
+        setError('Verification failed. Please try again.');
+        setIsSubmitting(false);
+      }
+    } else if (forgotStep === 2) {
+      if (forgotOtp.length < 4) {
+        setError('Please enter a valid 4-digit OTP');
+        return;
+      }
+      setIsSubmitting(true);
+      setTimeout(() => {
+        setIsSubmitting(false);
+        setForgotStep(3);
+        setSuccessMsg('OTP Verified! Enter your new password.');
+      }, 600);
+    } else if (forgotStep === 3) {
+      if (!validators.isValidPassword(forgotNewPin)) {
+        setError('Password must be min 6 characters and include an uppercase, lowercase, digit, and special character');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        await db.resetPassword(forgotPhone, forgotNewPin);
+        setSuccessMsg('Password updated successfully! You can now log in.');
+        setTimeout(() => switchTab('resident'), 2000);
+      } catch (err: any) {
+        setError(err.message || 'Failed to reset password');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -100,402 +200,595 @@ export const LoginView: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: '480px', margin: '1.5rem auto', padding: '0 1rem' }}>
-      {/* Brand Hero Card */}
-      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <div 
-          style={{ 
-            width: '56px', 
-            height: '56px', 
-            borderRadius: '16px', 
-            background: 'linear-gradient(135deg, var(--primary-600), #1d4ed8)', 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            color: '#fff',
-            boxShadow: '0 8px 24px rgba(59, 130, 246, 0.35)',
-            marginBottom: '0.75rem'
-          }}
-        >
-          <Sparkles size={32} />
-        </div>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>
-          PressWala
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          Ironing Order & Payment Tracker • {apartmentName}
-        </p>
-      </div>
+    <div className="login-theme-wrapper">
+      <style>{`
+        .login-theme-wrapper {
+          --login-bg: #FAF9F6;
+          --login-text: #1A1A1A;
+          --login-muted: #5A5A5A;
+          --login-surface: #FFFFFF;
+          --login-border: rgba(0, 0, 0, 0.08);
+          --login-accent: #7BAE5C;
+          --login-accent-hover: #69984C;
+          
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background-color: var(--login-bg);
+          color: var(--login-text);
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          overflow-y: auto;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding: 4rem 1rem;
+          z-index: 100;
+        }
 
-      {/* Main Login Card */}
-      <div 
-        style={{ 
-          background: 'var(--bg-surface)', 
-          border: '1px solid var(--border-subtle)', 
-          borderRadius: 'var(--radius-xl)', 
-          padding: '1.5rem',
-          boxShadow: 'var(--shadow-lg)'
-        }}
-      >
-        {/* Portal Role Tabs */}
-        <div 
-          style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 1fr 1fr', 
-            gap: '0.35rem', 
-            background: 'var(--bg-input)', 
-            padding: '0.3rem', 
-            borderRadius: 'var(--radius-md)', 
-            marginBottom: '1.25rem' 
-          }}
-        >
-          <button
-            type="button"
-            className={`btn btn-sm ${activeTab === 'resident' ? 'btn-primary' : 'btn-outline'}`}
-            style={{ border: 'none', fontSize: '0.775rem' }}
-            onClick={() => { setActiveTab('resident'); setError(null); }}
-          >
-            <Building2 size={13} />
-            Resident
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm ${activeTab === 'vendor' ? 'btn-primary' : 'btn-outline'}`}
-            style={{ border: 'none', fontSize: '0.775rem' }}
-            onClick={() => { setActiveTab('vendor'); setError(null); }}
-          >
-            <ShieldCheck size={13} />
-            Vendor
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm ${activeTab === 'register' ? 'btn-primary' : 'btn-outline'}`}
-            style={{ border: 'none', fontSize: '0.775rem' }}
-            onClick={() => { setActiveTab('register'); setError(null); }}
-          >
-            <UserCheck size={13} />
-            New Flat
-          </button>
-        </div>
+        .login-orb {
+          position: absolute;
+          top: 5%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 80vw;
+          max-width: 600px;
+          height: 600px;
+          background: radial-gradient(circle, rgba(123, 174, 92, 0.15) 0%, rgba(250, 249, 246, 0) 70%);
+          filter: blur(60px);
+          z-index: -1;
+          pointer-events: none;
+        }
 
-        {/* Error Alert */}
-        {error && (
+        .login-container {
+          position: relative;
+          width: 100%;
+          max-width: 440px;
+          z-index: 1;
+        }
+
+        .login-heading {
+          font-family: 'Outfit', sans-serif;
+          font-size: 2.2rem;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: var(--login-text);
+          margin-bottom: 0.25rem;
+        }
+
+        .login-card {
+          background: var(--login-surface);
+          border: 1px solid rgba(0,0,0,0.04);
+          border-radius: 24px;
+          padding: 2.25rem;
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+          margin-bottom: 1.5rem;
+        }
+
+        .login-tabs {
+          display: flex;
+          background: #F6F5F2;
+          padding: 0.4rem;
+          border-radius: 16px;
+          margin-bottom: 1.75rem;
+          gap: 0.4rem;
+        }
+
+        .login-tab {
+          flex: 1;
+          background: transparent;
+          border: none;
+          padding: 0.85rem 0.5rem;
+          border-radius: 12px;
+          color: var(--login-muted);
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 200ms ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.3rem;
+        }
+
+        .login-tab.active {
+          background: var(--login-surface);
+          color: var(--login-text);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .login-label {
+          display: block;
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: var(--login-muted);
+          margin-bottom: 0.4rem;
+        }
+
+        .login-input {
+          width: 100%;
+          padding: 0.9rem 1rem;
+          border-radius: 16px;
+          background: #F6F5F2;
+          border: 1px solid transparent;
+          color: var(--login-text);
+          font-size: 0.95rem;
+          transition: all 200ms ease;
+          margin-bottom: 1.5rem;
+        }
+
+        .login-input:focus {
+          outline: none;
+          border-color: var(--login-accent);
+          background: #FFFFFF;
+          box-shadow: 0 0 0 4px rgba(123, 174, 92, 0.15);
+        }
+
+        .login-btn {
+          width: 100%;
+          padding: 1rem;
+          border-radius: 9999px;
+          background: var(--login-accent);
+          color: #FFFFFF;
+          font-weight: 600;
+          font-size: 1rem;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .login-btn:hover:not(:disabled) {
+          background: var(--login-accent-hover);
+          transform: translateY(-2px) scale(1.02);
+          box-shadow: 0 8px 20px rgba(123, 174, 92, 0.3);
+        }
+
+        .login-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .login-demo-card {
+          background: var(--login-surface);
+          border: 1px solid rgba(0,0,0,0.04);
+          border-radius: 20px;
+          padding: 1.75rem;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .demo-option {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem;
+          margin-bottom: 0.6rem;
+          background: #F6F5F2;
+          border: 1px solid var(--login-border);
+          border-radius: 16px;
+          cursor: pointer;
+          transition: all 200ms ease;
+          text-align: left;
+          width: 100%;
+        }
+
+        .demo-option:hover {
+          background: #FFFFFF;
+          border-color: var(--login-accent);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(123, 174, 92, 0.12);
+        }
+
+        .demo-badge {
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          padding: 0.3rem 0.75rem;
+          border-radius: 9999px;
+        }
+        
+        .demo-badge-vendor { background: #F3E8FF; color: #9333EA; }
+        .demo-badge-customer { background: #E0F2FE; color: #0284C7; }
+        .demo-badge-due { background: #FEE2E2; color: #DC2626; }
+
+        .forgot-link {
+          font-size: 0.8rem;
+          color: var(--login-accent);
+          font-weight: 600;
+          background: none;
+          border: none;
+          cursor: pointer;
+          display: block;
+          margin: 1rem auto 0;
+        }
+        .forgot-link:hover {
+          text-decoration: underline;
+        }
+      `}</style>
+      
+      <div className="login-orb"></div>
+      
+      <div className="login-container">
+        {/* Brand Hero Card */}
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <div 
             style={{ 
-              background: 'var(--danger-subtle)', 
-              border: '1px solid var(--danger-border)', 
-              borderRadius: 'var(--radius-sm)', 
-              padding: '0.75rem', 
-              color: 'var(--danger-text)', 
-              fontSize: '0.8125rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginBottom: '1rem'
+              width: '68px', 
+              height: '68px', 
+              borderRadius: '22px', 
+              background: 'var(--login-accent)', 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              color: '#fff',
+              boxShadow: '0 8px 24px rgba(123, 174, 92, 0.35)',
+              marginBottom: '1.25rem'
             }}
           >
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
-            <span>{error}</span>
+            <Sparkles size={34} />
           </div>
-        )}
+          <h1 className="login-heading">
+            PressWala
+          </h1>
+          <p style={{ color: 'var(--login-muted)', fontSize: '0.95rem' }}>
+            Ironing Order & Payment Tracker • {apartmentName}
+          </p>
+        </div>
 
-        {/* Resident Login Form */}
-        {activeTab === 'resident' && (
-          <form onSubmit={handleResidentLogin}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                Flat Number
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. A-101 or A-204"
-                value={flatNumber}
-                onChange={(e) => setFlatNumber(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.95rem'
-                }}
-              />
-              <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                No SMS or OTP needed. Just your flat number and PIN.
-              </span>
+        {/* Main Login Card */}
+        <div className="login-card">
+          {/* Portal Role Tabs */}
+          {activeTab !== 'forgot' && (
+            <div className="login-tabs">
+              <button
+                type="button"
+                className={`login-tab ${activeTab === 'resident' ? 'active' : ''}`}
+                onClick={() => switchTab('resident')}
+              >
+                <Building2 size={16} />
+                Resident
+              </button>
+              <button
+                type="button"
+                className={`login-tab ${activeTab === 'vendor' ? 'active' : ''}`}
+                onClick={() => switchTab('vendor')}
+              >
+                <ShieldCheck size={16} />
+                Vendor
+              </button>
+              <button
+                type="button"
+                className={`login-tab ${activeTab === 'register' ? 'active' : ''}`}
+                onClick={() => switchTab('register')}
+              >
+                <UserCheck size={16} />
+                New Flat
+              </button>
             </div>
+          )}
 
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                Security PIN
-              </label>
-              <input
-                type="password"
-                placeholder="Enter 4-digit PIN (e.g. 1010)"
-                maxLength={8}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.95rem'
-                }}
-              />
+          {activeTab === 'forgot' && (
+            <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <KeyRound size={20} color="var(--login-accent)" />
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Reset Password</h2>
             </div>
+          )}
 
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg"
-              disabled={isSubmitting}
-              style={{ width: '100%' }}
+          {/* Error Alert */}
+          {error && (
+            <div 
+              style={{ 
+                background: '#FEE2E2', 
+                border: '1px solid #FCA5A5', 
+                borderRadius: '16px', 
+                padding: '1rem', 
+                color: '#DC2626', 
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1.5rem'
+              }}
             >
-              <span>{isSubmitting ? 'Verifying...' : 'Sign In as Resident'}</span>
-              <ArrowRight size={16} />
-            </button>
-          </form>
-        )}
-
-        {/* Vendor Login Form */}
-        {activeTab === 'vendor' && (
-          <form onSubmit={handleVendorLogin}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                Vendor ID / Mobile Number
-              </label>
-              <input
-                type="text"
-                placeholder="VENDOR or 9876543210"
-                value={vendorKey}
-                onChange={(e) => setVendorKey(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.95rem'
-                }}
-              />
+              <AlertCircle size={20} style={{ flexShrink: 0 }} />
+              <span>{error}</span>
             </div>
+          )}
 
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                Staff PIN
-              </label>
-              <input
-                type="password"
-                placeholder="Enter PIN (Default: 1234)"
-                value={vendorPin}
-                onChange={(e) => setVendorPin(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.95rem'
-                }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg"
-              disabled={isSubmitting}
-              style={{ width: '100%', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+          {successMsg && (
+            <div 
+              style={{ 
+                background: '#F0FDF4', 
+                border: '1px solid #86EFAC', 
+                borderRadius: '16px', 
+                padding: '1rem', 
+                color: '#166534', 
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1.5rem'
+              }}
             >
-              <ShieldCheck size={16} />
-              <span>{isSubmitting ? 'Verifying...' : 'Access Vendor Dashboard'}</span>
-            </button>
-          </form>
-        )}
-
-        {/* Register Flat Form */}
-        {activeTab === 'register' && (
-          <form onSubmit={handleRegister}>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                Resident Full Name
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Rajesh Kumar"
-                value={regName}
-                onChange={(e) => setRegName(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.65rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem'
-                }}
-              />
+              <ShieldCheck size={20} style={{ flexShrink: 0 }} />
+              <span>{successMsg}</span>
             </div>
+          )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          {/* Resident Login Form */}
+          {activeTab === 'resident' && (
+            <form onSubmit={handleResidentLogin}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                  Flat Number
-                </label>
+                <label className="login-label">Flat Number (e.g. S-3907)</label>
                 <input
                   type="text"
-                  placeholder="e.g. B-504"
-                  value={regFlat}
-                  onChange={(e) => setRegFlat(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.65rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.875rem'
-                  }}
+                  className="login-input"
+                  placeholder="e.g. S-3907"
+                  maxLength={6}
+                  value={flatNumber}
+                  onChange={(e) => setFlatNumber(e.target.value.toUpperCase())}
                 />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                  Mobile Number
-                </label>
+                <label className="login-label">Password</label>
                 <input
-                  type="tel"
-                  placeholder="10-digit number"
-                  value={regPhone}
-                  onChange={(e) => setRegPhone(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.65rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.875rem'
-                  }}
+                  type="password"
+                  className="login-input"
+                  placeholder="Enter your password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                Set 4-Digit Login PIN
-              </label>
-              <input
-                type="password"
-                placeholder="e.g. 5040"
-                maxLength={6}
-                value={regPin}
-                onChange={(e) => setRegPin(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.65rem',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
+              <button
+                type="submit"
+                className="login-btn"
+                disabled={isSubmitting}
+              >
+                <span>{isSubmitting ? 'Verifying...' : 'Sign In as Resident'}</span>
+                <ArrowRight size={20} />
+              </button>
+              
+              <button type="button" className="forgot-link" onClick={() => switchTab('forgot')}>
+                Forgot Password?
+              </button>
+            </form>
+          )}
 
-            <button
-              type="submit"
-              className="btn btn-success btn-lg"
-              disabled={isSubmitting}
-              style={{ width: '100%' }}
-            >
-              <span>{isSubmitting ? 'Registering...' : 'Save & Enter Flat Portal'}</span>
-              <ArrowRight size={16} />
-            </button>
-          </form>
-        )}
-      </div>
+          {/* Vendor Login Form */}
+          {activeTab === 'vendor' && (
+            <form onSubmit={handleVendorLogin}>
+              <div>
+                <label className="login-label">Vendor ID / Mobile Number</label>
+                <input
+                  type="text"
+                  className="login-input"
+                  placeholder="VENDOR or 9876543210"
+                  value={vendorKey}
+                  onChange={(e) => setVendorKey(e.target.value)}
+                />
+              </div>
 
-      {/* Quick Demo Switcher Card */}
-      <div 
-        style={{ 
-          marginTop: '1.5rem', 
-          background: 'var(--bg-surface)', 
-          border: '1px solid var(--border-subtle)', 
-          borderRadius: 'var(--radius-lg)', 
-          padding: '1.25rem' 
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <Zap size={16} color="var(--warning-color)" />
-          <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Instant Demo Profiles
-          </span>
+              <div>
+                <label className="login-label">Staff Password</label>
+                <input
+                  type="password"
+                  className="login-input"
+                  placeholder="Enter Password (Default: Demo@1234)"
+                  value={vendorPin}
+                  onChange={(e) => setVendorPin(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="login-btn"
+                disabled={isSubmitting}
+              >
+                <ShieldCheck size={20} />
+                <span>{isSubmitting ? 'Verifying...' : 'Access Vendor Dashboard'}</span>
+              </button>
+            </form>
+          )}
+
+          {/* Register Flat Form */}
+          {activeTab === 'register' && (
+            <form onSubmit={handleRegister}>
+              <div>
+                <label className="login-label">Resident Full Name</label>
+                <input
+                  type="text"
+                  className="login-input"
+                  placeholder="e.g. Rajesh Kumar"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  style={{ marginBottom: '0.85rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label className="login-label">Flat Number</label>
+                  <input
+                    type="text"
+                    className="login-input"
+                    placeholder="e.g. S-3907"
+                    maxLength={6}
+                    value={regFlat}
+                    onChange={(e) => setRegFlat(e.target.value.toUpperCase())}
+                    style={{ marginBottom: '0.85rem' }}
+                  />
+                </div>
+                <div>
+                  <label className="login-label">Mobile Number</label>
+                  <input
+                    type="tel"
+                    className="login-input"
+                    placeholder="10-digit number"
+                    maxLength={10}
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    style={{ marginBottom: '0.85rem' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="login-label">Set Complex Password</label>
+                <input
+                  type="password"
+                  className="login-input"
+                  placeholder="Upper, lower, digit, special char"
+                  value={regPin}
+                  onChange={(e) => setRegPin(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="login-btn"
+                disabled={isSubmitting}
+              >
+                <span>{isSubmitting ? 'Registering...' : 'Save & Enter Flat Portal'}</span>
+                <ArrowRight size={20} />
+              </button>
+            </form>
+          )}
+
+          {/* Forgot Password Flow */}
+          {activeTab === 'forgot' && (
+            <form onSubmit={handleForgotPassword}>
+              {forgotStep === 1 && (
+                <div>
+                  <label className="login-label">Registered Mobile Number</label>
+                  <input
+                    type="tel"
+                    className="login-input"
+                    placeholder="10-digit number"
+                    maxLength={10}
+                    value={forgotPhone}
+                    onChange={(e) => setForgotPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  />
+                  <button type="submit" className="login-btn" disabled={isSubmitting}>
+                    <span>{isSubmitting ? 'Sending OTP...' : 'Send OTP via SMS'}</span>
+                    <MessageSquare size={20} />
+                  </button>
+                </div>
+              )}
+              
+              {forgotStep === 2 && (
+                <div>
+                  <label className="login-label">Enter OTP sent to {forgotPhone}</label>
+                  <input
+                    type="text"
+                    className="login-input"
+                    placeholder="e.g. 1234"
+                    maxLength={4}
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  />
+                  <button type="submit" className="login-btn" disabled={isSubmitting}>
+                    <span>{isSubmitting ? 'Verifying...' : 'Verify OTP'}</span>
+                    <ShieldCheck size={20} />
+                  </button>
+                </div>
+              )}
+
+              {forgotStep === 3 && (
+                <div>
+                  <label className="login-label">Enter New Password</label>
+                  <input
+                    type="password"
+                    className="login-input"
+                    placeholder="Upper, lower, digit, special char"
+                    value={forgotNewPin}
+                    onChange={(e) => setForgotNewPin(e.target.value)}
+                  />
+                  <button type="submit" className="login-btn" disabled={isSubmitting}>
+                    <span>{isSubmitting ? 'Updating...' : 'Set New Password'}</span>
+                    <KeyRound size={20} />
+                  </button>
+                </div>
+              )}
+              
+              <button type="button" className="forgot-link" onClick={() => switchTab('resident')} style={{ color: 'var(--login-muted)', fontWeight: 500 }}>
+                Cancel & Back to Login
+              </button>
+            </form>
+          )}
         </div>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-          Click any persona below to test that role instantly without typing credentials:
-        </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {/* Ramu Dhobi (Vendor) */}
-          <button
-            type="button"
-            className="payment-option-card"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', margin: 0 }}
-            onClick={() => handleQuickSwitch(INITIAL_USERS[0])}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(168, 85, 247, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c084fc' }}>
-                <ShieldCheck size={18} />
-              </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Ramu Dhobi (Vendor)</div>
-                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>Dashboard, delivery gates, unpaid dues</div>
-              </div>
-            </div>
-            <span className="badge badge-vendor">Vendor</span>
-          </button>
+        {/* Quick Demo Switcher Card */}
+        <div className="login-demo-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+            <Zap size={20} color="var(--login-accent)" />
+            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--login-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Instant Demo Profiles
+            </span>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--login-muted)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+            Click any persona below to test that role instantly without typing credentials:
+          </p>
 
-          {/* Pooja Verma (A-204 - Has Outstanding Due) */}
-          <button
-            type="button"
-            className="payment-option-card"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', margin: 0 }}
-            onClick={() => handleQuickSwitch(INITIAL_USERS[2])}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171' }}>
-                <Building2 size={18} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {/* Ramu Dhobi (Vendor) */}
+            <button
+              type="button"
+              className="demo-option"
+              onClick={() => handleQuickSwitch(INITIAL_USERS[0])}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9333EA' }}>
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Ramu Dhobi (Vendor)</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--login-muted)' }}>Dashboard & deliveries</div>
+                </div>
               </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Pooja Verma (Flat A-204)</div>
-                <div style={{ fontSize: '0.725rem', color: 'var(--danger-text)' }}>⚠️ Has ₹110 Unpaid Order</div>
-              </div>
-            </div>
-            <span className="due-pill due-pill-alert">₹110 Due</span>
-          </button>
+              <span className="demo-badge demo-badge-vendor">Vendor</span>
+            </button>
 
-          {/* Sharma Ji (A-101 - Active Order) */}
-          <button
-            type="button"
-            className="payment-option-card"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', margin: 0 }}
-            onClick={() => handleQuickSwitch(INITIAL_USERS[1])}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
-                <Building2 size={18} />
+            {/* Pooja Verma (A-2004 - Has Outstanding Due) */}
+            <button
+              type="button"
+              className="demo-option"
+              onClick={() => handleQuickSwitch(INITIAL_USERS[2])}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
+                  <Building2 size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Pooja Verma (A-2004)</div>
+                  <div style={{ fontSize: '0.8rem', color: '#DC2626' }}>⚠️ ₹110 Unpaid Order</div>
+                </div>
               </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Sharma Ji (Flat A-101)</div>
-                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>Has active order in progress</div>
+              <span className="demo-badge demo-badge-due">₹110 Due</span>
+            </button>
+
+            {/* Sharma Ji (A-1001 - Active Order) */}
+            <button
+              type="button"
+              className="demo-option"
+              onClick={() => handleQuickSwitch(INITIAL_USERS[1])}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284C7' }}>
+                  <Building2 size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Sharma Ji (A-1001)</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--login-muted)' }}>Active order in progress</div>
+                </div>
               </div>
-            </div>
-            <span className="badge badge-customer">A-101</span>
-          </button>
+              <span className="demo-badge demo-badge-customer">A-1001</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

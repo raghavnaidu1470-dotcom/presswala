@@ -67,14 +67,14 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Pay via UPI">
       <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
         {/* Amount Pill */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
             Amount to Pay
           </div>
-          <div style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--success-text)', letterSpacing: '-0.02em' }}>
+          <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: '3rem', fontWeight: 800, color: 'var(--primary-500)', letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0.25rem 0' }}>
             ₹{amount}
           </div>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Paying to: <strong style={{ color: 'var(--text-primary)' }}>{vendorName}</strong>
           </div>
         </div>
@@ -82,10 +82,10 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
         {/* UPI Details Box */}
         <div 
           style={{ 
-            background: 'var(--bg-input)', 
-            border: '1px solid var(--border-subtle)', 
-            borderRadius: 'var(--radius-md)', 
-            padding: '1rem',
+            background: '#F6F5F2', 
+            border: '1px solid rgba(0, 0, 0, 0.06)', 
+            borderRadius: '16px', 
+            padding: '1.1rem',
             marginBottom: '1.25rem',
             display: 'flex',
             alignItems: 'center',
@@ -93,10 +93,10 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
           }}
         >
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
               Vendor UPI ID
             </div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
               {vendorUpi}
             </div>
           </div>
@@ -105,21 +105,19 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
             className="btn btn-sm btn-secondary" 
             onClick={handleCopyUpi}
           >
-            {copied ? <Check size={14} color="var(--success-color)" /> : <Copy size={14} />}
+            {copied ? <Check size={14} color="var(--primary-500)" /> : <Copy size={14} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
         </div>
 
         {/* Mobile 1-Tap UPI Launch */}
-        <div style={{ marginBottom: '1.25rem' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
           <a
             href={upiDeepLink}
             className="btn btn-primary btn-lg"
             style={{ 
               width: '100%', 
-              textDecoration: 'none', 
-              background: 'linear-gradient(135deg, #10b981, #059669)',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              textDecoration: 'none'
             }}
           >
             <ExternalLink size={18} />
@@ -130,16 +128,17 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
         {/* Manual Confirmation Section */}
         <div 
           style={{ 
-            background: 'var(--bg-surface-elevated)', 
-            borderRadius: 'var(--radius-md)', 
-            padding: '1rem',
-            textAlign: 'left'
+            background: '#F6F5F2', 
+            borderRadius: '16px', 
+            padding: '1.25rem',
+            textAlign: 'left',
+            border: '1px solid rgba(0, 0, 0, 0.06)'
           }}
         >
-          <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
             Already transferred?
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.85rem', lineHeight: 1.4 }}>
             Enter your UPI Reference/UTR number (optional) to update your flat's ledger immediately:
           </p>
           <input
@@ -149,13 +148,14 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
             onChange={(e) => setUtrNumber(e.target.value)}
             style={{
               width: '100%',
-              padding: '0.65rem',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle)',
+              padding: '0.75rem 1rem',
+              borderRadius: '12px',
+              background: '#FFFFFF',
+              border: '1px solid rgba(0, 0, 0, 0.1)',
               color: 'var(--text-primary)',
-              fontSize: '0.875rem',
-              marginBottom: '0.75rem'
+              fontSize: '0.9rem',
+              marginBottom: '0.85rem',
+              outline: 'none'
             }}
           />
           <button
@@ -163,7 +163,7 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
             className="btn btn-secondary"
             onClick={handleConfirmUpiPayment}
             disabled={isSubmitting}
-            style={{ width: '100%' }}
+            style={{ width: '100%', padding: '0.75rem' }}
           >
             <CheckCircle2 size={16} />
             <span>{isSubmitting ? 'Recording...' : 'Mark as Paid & Clear Due'}</span>

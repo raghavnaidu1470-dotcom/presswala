@@ -24,11 +24,11 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0.75rem 1rem;
+  background: rgba(250, 249, 246, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 0.85rem 1.5rem;
 }
 
 .header-inner {
@@ -43,7 +43,7 @@
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
   text-decoration: none;
   color: inherit;
 }
@@ -51,13 +51,13 @@
 .brand-icon {
   width: 38px;
   height: 38px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--primary-600), #1e3a8a);
+  border-radius: 12px;
+  background: var(--primary-500);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 2px 8px var(--primary-glow);
+  box-shadow: 0 4px 12px var(--primary-glow);
 }
 
 .brand-text-wrapper {
@@ -66,19 +66,18 @@
 }
 
 .brand-title {
-  font-size: 1.125rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ffffff, #93c5fd);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .brand-subtitle {
   font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-weight: 500;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .user-nav-actions {
@@ -87,29 +86,29 @@
   gap: 0.5rem;
 }
 
-/* Role & Status Badges */
+/* Role & Status Badges (Pastel SaaS Tones) */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
+  padding: 0.35rem 0.75rem;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .badge-vendor {
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: rgba(142, 168, 110, 0.15);
+  color: #557A3C;
+  border: 1px solid rgba(142, 168, 110, 0.3);
 }
 
 .badge-customer {
-  background: var(--primary-subtle);
-  color: #60a5fa;
-  border: 1px solid rgba(96, 165, 250, 0.3);
+  background: #EBE8E0;
+  color: #1A1A1A;
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .badge-paid {
@@ -122,7 +121,6 @@
   background: var(--danger-subtle);
   color: var(--danger-text);
   border: 1px solid var(--danger-border);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
 }
 
 .badge-partial {
@@ -132,27 +130,27 @@
 }
 
 .badge-created {
-  background: rgba(148, 163, 184, 0.15);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .badge-in-progress {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: var(--warning-subtle);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
 }
 
 .badge-ready {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fcd34d;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--warning-subtle);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
 }
 
 .badge-delivered {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--success-subtle);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
 }
 
 /* Outstanding Due Pill (Header / Cards) */
@@ -160,24 +158,24 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.75rem;
+  padding: 0.35rem 0.85rem;
   border-radius: var(--radius-full);
   font-size: 0.8125rem;
   font-weight: 700;
   transition: transform var(--transition-fast);
+  cursor: pointer;
 }
 
 .due-pill-alert {
-  background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  animation: pulse-border 2s infinite;
+  background: var(--danger-subtle);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
 }
 
 .due-pill-clean {
-  background: rgba(16, 185, 129, 0.15);
-  color: #86efac;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--success-subtle);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
 }
 
 @keyframes pulse-border {
@@ -416,13 +414,13 @@
 }
 
 .flat-badge-prominent {
-  background: linear-gradient(135deg, #1e293b, #334155);
-  color: #f8fafc;
-  padding: 0.2rem 0.6rem;
-  border-radius: var(--radius-xs);
+  background: #EBE8E0;
+  color: #1A1A1A;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
   font-size: 0.8125rem;
   font-weight: 700;
-  border: 1px solid var(--border-medium);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .order-time {
@@ -586,8 +584,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  padding: 0.55rem 1rem;
-  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--radius-full);
   font-size: 0.875rem;
   font-weight: 600;
   transition: all var(--transition-fast);
@@ -595,51 +593,53 @@
 }
 
 .btn-sm {
-  padding: 0.4rem 0.75rem;
+  padding: 0.4rem 0.85rem;
   font-size: 0.8125rem;
 }
 
 .btn-lg {
-  padding: 0.85rem 1.5rem;
+  padding: 0.85rem 1.75rem;
   font-size: 1rem;
   font-weight: 700;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  background: var(--primary-500);
   color: #ffffff;
-  box-shadow: 0 2px 8px var(--primary-glow);
+  box-shadow: 0 4px 14px var(--primary-glow);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #3b82f6, var(--primary-600));
+  background: var(--primary-600);
+  transform: translateY(-1px);
 }
 
 .btn-success {
-  background: linear-gradient(135deg, #059669, var(--success-color));
+  background: var(--success-color);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 14px var(--success-subtle);
 }
 
 .btn-success:hover {
-  background: linear-gradient(135deg, var(--success-color), #34d399);
+  background: #69984C;
+  transform: translateY(-1px);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #dc2626, var(--danger-color));
+  background: var(--danger-color);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 14px var(--danger-subtle);
 }
 
 .btn-whatsapp {
   background: #25D366;
-  color: #064e3b;
+  color: #ffffff;
   font-weight: 700;
 }
 
 .btn-whatsapp:hover {
-  background: #22c55e;
-  color: #022c22;
+  background: #20BA5A;
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -655,13 +655,12 @@
 
 .btn-outline {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   border: 1px solid var(--border-subtle);
 }
 
 .btn-outline:hover {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
+  background: var(--bg-surface-elevated);
   border-color: var(--border-medium);
 }
 
@@ -672,7 +671,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(26, 26, 26, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 50;
@@ -683,18 +682,19 @@
 }
 
 .modal-content {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-xl);
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 24px;
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow-modal);
-  padding: 1.5rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12);
+  padding: 2rem;
   display: flex;
   flex-direction: column;
   animation: modal-enter 200ms ease-out;
+  color: #1A1A1A;
 }
 
 @keyframes modal-enter {
@@ -714,13 +714,15 @@
   justify-content: space-between;
   margin-bottom: 1.25rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .modal-title {
-  font-size: 1.25rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.01em;
+  color: #1A1A1A;
 }
 
 /* Mandatory Payment Prompt Modal Specifics */

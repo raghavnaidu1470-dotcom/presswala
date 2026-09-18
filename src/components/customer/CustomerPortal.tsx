@@ -6,6 +6,7 @@ import { PaymentSummaryBar } from './PaymentSummaryBar';
 import { OrderCard } from './OrderCard';
 import { CreateOrderView } from './CreateOrderView';
 import { UpiPaymentModal } from './UpiPaymentModal';
+import { Skeleton } from '../common/Skeleton';
 import { 
   PlusCircle, 
   Clock, 
@@ -24,6 +25,7 @@ export const CustomerPortal: React.FC = () => {
   const [isUpiModalOpen, setIsUpiModalOpen] = useState(false);
   const [selectedOrderForUpi, setSelectedOrderForUpi] = useState<Order | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const fetchCustomerData = async () => {
     if (!currentUser) return;
@@ -39,6 +41,7 @@ export const CustomerPortal: React.FC = () => {
       console.error('Failed to load customer data:', err);
     } finally {
       setIsRefreshing(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -74,131 +77,281 @@ export const CustomerPortal: React.FC = () => {
   });
 
   return (
-    <div className="main-content">
-      {/* Payment Summary Bar */}
-      <PaymentSummaryBar
-        totalPaid={totalPaid}
-        totalOutstanding={totalOutstanding}
-        onOpenUpiModal={handleOpenGeneralUpi}
-      />
+    <div className="customer-theme-wrapper">
+      <style>{`
+        .customer-theme-wrapper {
+          --customer-bg: #FAF9F6;
+          --customer-surface: #FFFFFF;
+          --customer-text: #1A1A1A;
+          --customer-muted: #5A5A5A;
+          --customer-border: rgba(0, 0, 0, 0.08);
+          --customer-accent: #7BAE5C;
+          --customer-accent-hover: #69984C;
+          
+          /* Pastel Status Colors */
+          --status-sage: #8EA86E;
+          --status-sage-bg: rgba(142, 168, 110, 0.15);
+          
+          --status-amber: #D4A373;
+          --status-amber-bg: rgba(212, 163, 115, 0.15);
+          
+          --status-coral: #D98880;
+          --status-coral-bg: rgba(217, 136, 128, 0.15);
 
-      {/* Tabs */}
-      <div className="tabs-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'create' ? 'active' : ''}`}
-            onClick={() => setActiveTab('create')}
-          >
-            <PlusCircle size={16} />
-            <span>Create Order</span>
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
-            onClick={() => setActiveTab('orders')}
-          >
-            <Clock size={16} />
-            <span>My Orders ({orders.length})</span>
-          </button>
-        </div>
+          position: relative;
+          min-height: 100vh;
+          background-color: var(--customer-bg);
+          color: var(--customer-text);
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          z-index: 10;
+        }
 
-        <button
-          type="button"
-          className="btn btn-sm btn-outline"
-          onClick={fetchCustomerData}
-          disabled={isRefreshing}
-          title="Refresh Orders"
-        >
-          <RotateCw size={14} className={isRefreshing ? 'spin-icon' : ''} />
-          <span className="hide-mobile">Refresh</span>
-        </button>
-      </div>
+        .customer-theme-wrapper h1, 
+        .customer-theme-wrapper h2, 
+        .customer-theme-wrapper h3,
+        .customer-heading {
+          font-family: 'Outfit', sans-serif;
+          letter-spacing: -0.02em;
+        }
 
-      {/* Tab 1: Create Order */}
-      {activeTab === 'create' && (
-        <CreateOrderView onOrderCreated={handleOrderCreated} />
-      )}
+        .customer-card {
+          background: var(--customer-surface);
+          border-radius: 24px;
+          border: 1px solid rgba(0,0,0,0.03);
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.04);
+        }
 
-      {/* Tab 2: My Orders */}
-      {activeTab === 'orders' && (
-        <div>
-          {/* Filter Pills */}
-          <div className="filter-pills" style={{ marginBottom: '1.25rem' }}>
+        .customer-btn {
+          border-radius: 9999px;
+          font-weight: 600;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+          border: none;
+        }
+
+        .customer-btn-primary {
+          background: var(--customer-accent);
+          color: #FFFFFF;
+          padding: 0.85rem 1.25rem;
+        }
+
+        .customer-btn-primary:hover {
+          background: var(--customer-accent-hover);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(123, 174, 92, 0.25);
+        }
+          
+        .customer-btn-secondary {
+          background: #F6F5F2;
+          color: var(--customer-text);
+          border: 1px solid var(--customer-border);
+          padding: 0.5rem 1rem;
+          font-size: 0.85rem;
+        }
+
+        .customer-btn-secondary:hover {
+          background: #FFFFFF;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .customer-tabs {
+          display: flex;
+          background: #EBE8E0;
+          padding: 0.35rem;
+          border-radius: 16px;
+          margin-bottom: 1.5rem;
+          gap: 0.35rem;
+        }
+
+        .customer-tab {
+          flex: 1;
+          padding: 0.75rem 1rem;
+          border-radius: 12px;
+          background: transparent;
+          border: none;
+          color: var(--customer-muted);
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: all 200ms ease;
+        }
+
+        .customer-tab.active {
+          background: var(--customer-surface);
+          color: var(--customer-text);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .customer-filter-pills {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 1.5rem;
+          overflow-x: auto;
+          padding-bottom: 0.5rem;
+        }
+
+        .customer-filter-pill {
+          padding: 0.4rem 1rem;
+          border-radius: 9999px;
+          background: #F6F5F2;
+          border: 1px solid var(--customer-border);
+          color: var(--customer-muted);
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 200ms ease;
+        }
+
+        .customer-filter-pill.active {
+          background: var(--customer-text);
+          color: #FFFFFF;
+          border-color: var(--customer-text);
+        }
+
+        /* Override main-content styling specific to customer portal */
+        .customer-main-content {
+          width: 100%;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 1.25rem 1rem 6rem 1rem;
+        }
+      `}</style>
+
+      <div className="customer-main-content">
+        {/* Payment Summary Bar */}
+        <PaymentSummaryBar
+          totalPaid={totalPaid}
+          totalOutstanding={totalOutstanding}
+          onOpenUpiModal={handleOpenGeneralUpi}
+          isLoading={isInitialLoad}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          {/* Tabs */}
+          <div className="customer-tabs" style={{ margin: 0, flex: 1, maxWidth: '400px' }}>
             <button
               type="button"
-              className={`filter-pill ${filterStatus === 'all' ? 'active' : ''}`}
-              onClick={() => setFilterStatus('all')}
+              className={`customer-tab ${activeTab === 'create' ? 'active' : ''}`}
+              onClick={() => setActiveTab('create')}
             >
-              All ({orders.length})
+              <PlusCircle size={18} />
+              <span className="hide-mobile">Create Order</span>
             </button>
             <button
               type="button"
-              className={`filter-pill ${filterStatus === 'active' ? 'active' : ''}`}
-              onClick={() => setFilterStatus('active')}
+              className={`customer-tab ${activeTab === 'orders' ? 'active' : ''}`}
+              onClick={() => setActiveTab('orders')}
             >
-              In Progress ({orders.filter(o => o.status !== 'delivered').length})
-            </button>
-            <button
-              type="button"
-              className={`filter-pill ${filterStatus === 'delivered' ? 'active' : ''}`}
-              onClick={() => setFilterStatus('delivered')}
-            >
-              Delivered ({orders.filter(o => o.status === 'delivered').length})
+              <Clock size={18} />
+              <span className="hide-mobile">My Orders ({orders.length})</span>
             </button>
           </div>
 
-          {/* Orders List */}
-          {filteredOrders.length > 0 ? (
-            <div>
-              {filteredOrders.map(order => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onPayUpi={handlePayUpiForOrder}
-                />
-              ))}
-            </div>
-          ) : (
-            <div 
-              style={{ 
-                background: 'var(--bg-surface)', 
-                border: '1px dashed var(--border-subtle)', 
-                borderRadius: 'var(--radius-lg)', 
-                padding: '3rem 1.5rem', 
-                textAlign: 'center' 
-              }}
-            >
-              <PackageSearch size={42} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.35rem' }}>
-                No orders found
-              </h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                {filterStatus !== 'all' 
-                  ? 'No orders match this status filter.' 
-                  : "You haven't placed any ironing requests yet."}
-              </p>
+          <button
+            type="button"
+            className="customer-btn customer-btn-secondary"
+            onClick={fetchCustomerData}
+            disabled={isRefreshing}
+            title="Refresh Orders"
+            style={{ marginLeft: '1rem' }}
+          >
+            <RotateCw size={16} className={isRefreshing ? 'spin-icon' : ''} />
+            <span className="hide-mobile">Refresh</span>
+          </button>
+        </div>
+
+        {/* Tab 1: Create Order */}
+        {activeTab === 'create' && (
+          <CreateOrderView onOrderCreated={handleOrderCreated} />
+        )}
+
+        {/* Tab 2: My Orders */}
+        {activeTab === 'orders' && (
+          <div>
+            {/* Filter Pills */}
+            <div className="customer-filter-pills">
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => setActiveTab('create')}
+                className={`customer-filter-pill ${filterStatus === 'all' ? 'active' : ''}`}
+                onClick={() => setFilterStatus('all')}
               >
-                <ShoppingBag size={14} />
-                <span>Create First Order</span>
+                All ({orders.length})
+              </button>
+              <button
+                type="button"
+                className={`customer-filter-pill ${filterStatus === 'active' ? 'active' : ''}`}
+                onClick={() => setFilterStatus('active')}
+              >
+                In Progress ({orders.filter(o => o.status !== 'delivered').length})
+              </button>
+              <button
+                type="button"
+                className={`customer-filter-pill ${filterStatus === 'delivered' ? 'active' : ''}`}
+                onClick={() => setFilterStatus('delivered')}
+              >
+                Delivered ({orders.filter(o => o.status === 'delivered').length})
               </button>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* UPI Payment Modal */}
-      <UpiPaymentModal
-        isOpen={isUpiModalOpen}
-        onClose={() => setIsUpiModalOpen(false)}
-        orderId={selectedOrderForUpi?.id || null}
-        amount={selectedOrderForUpi ? (selectedOrderForUpi.total_amount - selectedOrderForUpi.paid_amount) : totalOutstanding}
-        onPaymentSuccess={fetchCustomerData}
-      />
+            {/* Orders List */}
+            {isInitialLoad ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <Skeleton height="180px" borderRadius="24px" />
+                <Skeleton height="180px" borderRadius="24px" />
+              </div>
+            ) : filteredOrders.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {filteredOrders.map(order => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    onPayUpi={handlePayUpiForOrder}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="customer-card" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+                <PackageSearch size={48} style={{ color: 'var(--customer-border)', marginBottom: '1rem', display: 'inline-block' }} />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', fontFamily: 'Outfit' }}>
+                  No orders found
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--customer-muted)', marginBottom: '1.5rem' }}>
+                  {filterStatus !== 'all' 
+                    ? 'No orders match this status filter.' 
+                    : "You haven't placed any ironing requests yet."}
+                </p>
+                <button
+                  type="button"
+                  className="customer-btn customer-btn-primary"
+                  onClick={() => setActiveTab('create')}
+                >
+                  <ShoppingBag size={18} />
+                  <span>Create First Order</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* UPI Payment Modal */}
+        <UpiPaymentModal
+          isOpen={isUpiModalOpen}
+          onClose={() => setIsUpiModalOpen(false)}
+          orderId={selectedOrderForUpi?.id || null}
+          amount={selectedOrderForUpi ? (selectedOrderForUpi.total_amount - selectedOrderForUpi.paid_amount) : totalOutstanding}
+          onPaymentSuccess={fetchCustomerData}
+        />
+      </div>
     </div>
   );
 };
