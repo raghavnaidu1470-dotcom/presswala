@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../services/db';
 import { 
   Sparkles, 
   LogOut, 
   User as UserIcon, 
   AlertCircle, 
   CheckCircle2, 
-  Building2 
+  Building2
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -21,7 +22,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSwitchPortal 
 }) => {
   const { currentUser, role, logout } = useAuth();
-  const apartmentName = import.meta.env.VITE_APARTMENT_NAME || 'Palm Heights';
+  const [currentApartmentName, setCurrentApartmentName] = useState<string>(
+    import.meta.env.VITE_APARTMENT_NAME || 'Palm Heights'
+  );
+
+  useEffect(() => {
+    if (currentUser?.apartment_id) {
+      db.getApartmentById(currentUser.apartment_id).then(apt => {
+        if (apt) setCurrentApartmentName(apt.name);
+      });
+    }
+  }, [currentUser?.apartment_id]);
 
   return (
     <header className="header-nav">
@@ -35,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="brand-title">PressWala</span>
             <span className="brand-subtitle">
               <Building2 size={11} style={{ display: 'inline', marginRight: '3px' }} />
-              {apartmentName}
+              {currentApartmentName}
             </span>
           </div>
         </div>
@@ -47,7 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {role === 'customer' ? (
                 <>
                   <span className="flat-badge-prominent">
-                    Flat {currentUser.flat_number}
+                    {currentUser.block ? `${currentUser.block} • ` : ''}Flat {currentUser.flat_number}
                   </span>
 
                   {/* Dynamic Due Pill */}

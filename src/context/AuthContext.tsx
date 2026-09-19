@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import { User, UserRole, ResidentJoinRequest } from '../types';
 import { db, formatAuthEmail } from '../services/db';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { OFFLINE_DEMO_CREDENTIALS } from '../services/seedData';
@@ -11,6 +11,8 @@ interface AuthContextType {
   login: (loginKey: string, password: string) => Promise<boolean>;
   logout: () => void;
   registerResident: (name: string, flatNumber: string, phone: string, password: string) => Promise<User>;
+  requestResidentAccess: (name: string, phone: string, block: string, flatNumber: string, apartmentId: string) => Promise<ResidentJoinRequest>;
+  registerVendor: (name: string, phone: string, apartmentName: string, password: string) => Promise<User>;
   switchDemoUser: (user: User) => void;
 }
 
@@ -66,6 +68,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newUser;
   };
 
+  const requestResidentAccess = async (
+    name: string,
+    phone: string,
+    block: string,
+    flatNumber: string,
+    apartmentId: string
+  ): Promise<ResidentJoinRequest> => {
+    return await db.createResidentJoinRequest(name, phone, block, flatNumber, apartmentId);
+  };
+
+  const registerVendor = async (
+    name: string,
+    phone: string,
+    apartmentName: string,
+    password: string
+  ): Promise<User> => {
+    return await db.registerVendor(name, phone, apartmentName, password);
+  };
+
   const switchDemoUser = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
@@ -100,6 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         registerResident,
+        requestResidentAccess,
+        registerVendor,
         switchDemoUser
       }}
     >

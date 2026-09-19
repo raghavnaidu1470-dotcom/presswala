@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Order } from '../../types';
+import { Order, OrderChangeProposal } from '../../types';
 import { db } from '../../services/db';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Search, 
   Sparkles, 
@@ -11,9 +12,14 @@ import {
   AlertCircle, 
   Check, 
   ChevronDown, 
-  ChevronUp,
-  FileText
+  ChevronUp, 
+  FileText,
+  Calendar,
+  Edit3
 } from 'lucide-react';
+import { DeliverySlotPickerModal } from '../common/DeliverySlotPickerModal';
+import { ProposeChangeModal } from '../common/ProposeChangeModal';
+import { ReviewChangeModal } from '../common/ReviewChangeModal';
 
 interface OrderManagementViewProps {
   orders: Order[];
@@ -28,9 +34,18 @@ export const OrderManagementView: React.FC<OrderManagementViewProps> = ({
   onRequestDeliveryPayment,
   onCollectPaymentForDeliveredOrder
 }) => {
+  const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  // Phase D Modals State
+  const [selectedOrderForSlot, setSelectedOrderForSlot] = useState<Order | null>(null);
+  const [selectedOrderForProposal, setSelectedOrderForProposal] = useState<Order | null>(null);
+  const [selectedProposalForReview, setSelectedProposalForReview] = useState<{
+    order: Order;
+    proposal: OrderChangeProposal;
+  } | null>(null);
 
   const handleStartIroning = async (orderId: string) => {
     await db.updateOrderStatus(orderId, 'in_progress');
@@ -39,6 +54,42 @@ export const OrderManagementView: React.FC<OrderManagementViewProps> = ({
 
   const handleMarkReady = async (orderId: string) => {
     await db.updateOrderStatus(orderId, 'ready');
+    onOrderUpdated();
+  };
+
+  const handleVendorBookSlot = async (date: string, window: string) => {
+    if (!selectedOrderForSlot || !currentUser) return;
+    await db.bookDeliverySlot(selectedOrderForSlot.id, date, window, {
+      id: currentUser.id,
+      role: 'vendor',
+      apartment_id: currentUser.apartment_id
+    });
+    setSelectedOrderForSlot(null);
+    onOrderUpdated();
+  };
+
+  const handleVendorSubmitProposal = async (
+    proposedItems: { garmentTypeId: string; garmentName: string; unitPrice: number; quantity: number }[],
+    reason: string
+  ) => {
+    if (!selectedOrderForProposal || !currentUser) return;
+    await db.proposeOrderChange(selectedOrderForProposal.id, proposedItems, reason, {
+      id: currentUser.id,
+      role: 'vendor',
+      apartment_id: currentUser.apartment_id
+    });
+    setSelectedOrderForProposal(null);
+    onOrderUpdated();
+  };
+
+  const handleVendorRespondProposal = async (decision: 'accept' | 'decline') => {
+    if (!selectedProposalForReview || !currentUser) return;
+    await db.respondToOrderChange(selectedProposalForReview.proposal.id, decision, {
+      id: currentUser.id,
+      role: 'vendor',
+      apartment_id: currentUser.apartment_id
+    });
+    setSelectedProposalForReview(null);
     onOrderUpdated();
   };
 
@@ -158,6 +209,7 @@ export const OrderManagementView: React.FC<OrderManagementViewProps> = ({
           {filteredOrders.map(order => {
             const isUnpaid = order.payment_status === 'unpaid';
             const isExpanded = expandedOrderId === order.id;
+            const isDelivered = order.status === 'delivered';
             const totalGarments = order.items?.reduce((acc, itm) => acc + itm.quantity, 0) || 0;
 
             const whatsappMessage = encodeURIComponent(
@@ -173,7 +225,7 @@ export const OrderManagementView: React.FC<OrderManagementViewProps> = ({
                   border: isUnpaid && order.status === 'delivered' ? '1px solid var(--status-coral-bg)' : '1px solid var(--vendor-border)'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
                       <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 700, fontSize: '1.25rem' }}>
@@ -234,6 +286,136 @@ export const OrderManagementView: React.FC<OrderManagementViewProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Delivery Slot Strip (Phase D) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {order.delivery_slot_date && order.delivery_slot_window ? (
+                    <div style={{ 
+                      display: 'inline-flex', alignItems: 'center', gap: '0.4rem', 
+                      fontSize: '0.8rem', color: '#1E3A8A', background: '#EFF6FF', 
+                      padding: '0.3rem 0.7rem', borderRadius: '8px', fontWeight: 600, border: '1px solid #BFDBFE' 
+                    }}>
+                      <Calendar size={13} />
+                      <span>Slot: <strong>{order.delivery_slot_date}</strong> ({order.delivery_slot_window})</span>
+                      {!isDelivered && (
+                        <button 
+                          type="button" 
+                          onClick={() => setSelectedOrderForSlot(order)}
+                          style={{ background: 'none', border: 'none', color: '#2563EB', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.75rem', marginLeft: '0.4rem', fontWeight: 700 }}
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
+                  ) : !isDelivered ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderForSlot(order)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.75rem',
+                        color: 'var(--vendor-muted)',
+                        background: '#F6F5F2',
+                        border: '1px dashed var(--vendor-border)',
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      <Calendar size={13} />
+                      <span>+ Assign Delivery Slot</span>
+                    </button>
+                  ) : null}
+
+                  {/* Propose Change button for vendor */}
+                  {!isDelivered && !order.active_change_proposal && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderForProposal(order)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.75rem',
+                        color: 'var(--vendor-muted)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      <Edit3 size={12} />
+                      <span>Modify Garments</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Mutual Order Change Banner (Phase D) */}
+                {order.active_change_proposal && (
+                  <div style={{
+                    padding: '0.85rem 1rem',
+                    borderRadius: '12px',
+                    background: order.active_change_proposal.proposed_by === 'customer' ? '#F5F3FF' : '#FFFBEB',
+                    border: order.active_change_proposal.proposed_by === 'customer' ? '1px solid #DDD6FE' : '1px solid #FDE68A',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    marginBottom: '1rem'
+                  }}>
+                    <div>
+                      <div style={{ 
+                        fontSize: '0.825rem', 
+                        fontWeight: 700, 
+                        color: order.active_change_proposal.proposed_by === 'customer' ? '#5B21B6' : '#92400E' 
+                      }}>
+                        {order.active_change_proposal.proposed_by === 'customer'
+                          ? 'Resident Requested Order Changes'
+                          : 'Change Proposal Awaiting Resident Approval'}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.75rem', 
+                        color: order.active_change_proposal.proposed_by === 'customer' ? '#7C3AED' : '#B45309',
+                        marginTop: '0.15rem'
+                      }}>
+                        Proposed Total: ₹{order.active_change_proposal.proposed_total_amount} (Current: ₹{order.total_amount})
+                        {order.active_change_proposal.reason && ` • "${order.active_change_proposal.reason}"`}
+                      </div>
+                    </div>
+
+                    {order.active_change_proposal.proposed_by === 'customer' ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProposalForReview({ order, proposal: order.active_change_proposal! })}
+                        className="vendor-btn vendor-btn-primary"
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.4rem 0.8rem',
+                          background: '#7C3AED',
+                          borderRadius: '8px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Review Request
+                      </button>
+                    ) : (
+                      <span style={{ 
+                        fontSize: '0.75rem', 
+                        fontWeight: 600, 
+                        color: '#B45309',
+                        background: '#FEF3C7',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '6px'
+                      }}>
+                        Pending Resident
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Garments Breakdown Bar */}
                 <div style={{ background: '#F6F5F2', borderRadius: '16px', padding: '1rem', marginBottom: '1rem' }}>
@@ -350,6 +532,42 @@ export const OrderManagementView: React.FC<OrderManagementViewProps> = ({
             Try adjusting your search or filters.
           </p>
         </div>
+      )}
+
+      {/* Phase D Modals */}
+      {/* 1. Delivery Slot Picker Modal */}
+      {selectedOrderForSlot && (
+        <DeliverySlotPickerModal
+          isOpen={Boolean(selectedOrderForSlot)}
+          onClose={() => setSelectedOrderForSlot(null)}
+          apartmentId={selectedOrderForSlot.apartment_id || ''}
+          currentDate={selectedOrderForSlot.delivery_slot_date}
+          currentWindow={selectedOrderForSlot.delivery_slot_window}
+          onSelectSlot={(date, window) => handleVendorBookSlot(date, window)}
+        />
+      )}
+
+      {/* 2. Propose Change Modal */}
+      {selectedOrderForProposal && (
+        <ProposeChangeModal
+          isOpen={Boolean(selectedOrderForProposal)}
+          onClose={() => setSelectedOrderForProposal(null)}
+          order={selectedOrderForProposal}
+          callerRole="vendor"
+          onSubmitProposal={handleVendorSubmitProposal}
+        />
+      )}
+
+      {/* 3. Review Change Modal */}
+      {selectedProposalForReview && (
+        <ReviewChangeModal
+          isOpen={Boolean(selectedProposalForReview)}
+          onClose={() => setSelectedProposalForReview(null)}
+          order={selectedProposalForReview.order}
+          proposal={selectedProposalForReview.proposal}
+          callerRole="vendor"
+          onRespond={handleVendorRespondProposal}
+        />
       )}
     </div>
   );

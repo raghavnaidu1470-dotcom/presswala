@@ -11,7 +11,12 @@ const __dirname = path.dirname(__filename);
 const migrationFiles = [
   '../supabase/migrations/001_initial_schema.sql',
   '../supabase/migrations/002_row_level_security.sql',
-  '../supabase/migrations/003_remove_pin_hash.sql'
+  '../supabase/migrations/003_remove_pin_hash.sql',
+  '../supabase/migrations/004_owner_and_multi_tenant_phase_a.sql',
+  '../supabase/migrations/005_apartment_scoping_and_join_requests_phase_b.sql',
+  '../supabase/migrations/006_block_dashboard_and_contacts_phase_c.sql',
+  '../supabase/migrations/007_phase_d_order_workflow.sql',
+  '../supabase/migrations/008_security_hardening.sql'
 ];
 
 async function runSetup() {

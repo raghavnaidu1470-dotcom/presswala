@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Order, OrderStatus } from '../../types';
+import { db } from '../../services/db';
 import { 
   Clock, 
   Check, 
@@ -10,12 +11,19 @@ import {
   QrCode, 
   ChevronDown, 
   ChevronUp, 
-  FileText 
+  FileText,
+  Calendar,
+  Lock,
+  Edit3
 } from 'lucide-react';
+import { DeliverySlotPickerModal } from '../common/DeliverySlotPickerModal';
+import { ProposeChangeModal } from '../common/ProposeChangeModal';
+import { ReviewChangeModal } from '../common/ReviewChangeModal';
 
 interface OrderCardProps {
   order: Order;
   onPayUpi?: (order: Order) => void;
+  onOrderUpdated?: () => void;
 }
 
 const STAGES: { key: OrderStatus; label: string; icon: React.ReactNode }[] = [
@@ -35,11 +43,20 @@ function getStageIndex(status: OrderStatus): number {
   }
 }
 
-export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
+export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi, onOrderUpdated }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
+  const [isProposeModalOpen, setIsProposeModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+
   const currentStageIndex = getStageIndex(order.status);
   const isDelivered = order.status === 'delivered';
   const isUnpaid = order.payment_status === 'unpaid';
+  const isPartial = order.payment_status === 'partial';
+  const hasOutstandingDue = isUnpaid || isPartial;
+
+  // Phase D: Payment-option timing — "Pay Now" is strictly hidden until order status is Ready or Delivered
+  const isPaymentUnlocked = order.status === 'ready' || order.status === 'delivered';
 
   // Format date nicely
   const orderDate = new Date(order.created_at).toLocaleDateString('en-IN', {
@@ -50,6 +67,37 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
   });
 
   const totalItemsCount = order.items?.reduce((acc, itm) => acc + itm.quantity, 0) || 0;
+
+  const handleBookSlot = async (date: string, window: string) => {
+    await db.bookDeliverySlot(order.id, date, window, {
+      id: order.customer_id,
+      role: 'customer',
+      apartment_id: order.apartment_id
+    });
+    onOrderUpdated?.();
+  };
+
+  const handleProposeChange = async (
+    proposedItems: { garmentTypeId: string; garmentName: string; unitPrice: number; quantity: number }[],
+    reason: string
+  ) => {
+    await db.proposeOrderChange(order.id, proposedItems, reason, {
+      id: order.customer_id,
+      role: 'customer',
+      apartment_id: order.apartment_id
+    });
+    onOrderUpdated?.();
+  };
+
+  const handleRespondToProposal = async (decision: 'accept' | 'decline') => {
+    if (!order.active_change_proposal) return;
+    await db.respondToOrderChange(order.active_change_proposal.id, decision, {
+      id: order.customer_id,
+      role: 'customer',
+      apartment_id: order.apartment_id
+    });
+    onOrderUpdated?.();
+  };
 
   return (
     <div 
@@ -77,7 +125,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          {/* Payment Status Badge - Positioned clearly in corner */}
+          {/* Payment Status Badge */}
           {order.payment_status === 'paid' && (
             <span style={{ 
               background: 'var(--status-sage-bg)', color: '#557A3C', padding: '0.35rem 0.75rem', 
@@ -105,8 +153,139 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
         </div>
       </div>
 
+      {/* Delivery Slot Strip */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+        {order.delivery_slot_date && order.delivery_slot_window ? (
+          <div style={{ 
+            display: 'inline-flex', alignItems: 'center', gap: '0.4rem', 
+            fontSize: '0.8rem', color: '#275225', background: 'var(--status-sage-bg)', 
+            padding: '0.35rem 0.75rem', borderRadius: '10px', fontWeight: 600 
+          }}>
+            <Calendar size={13} />
+            <span>Delivery: {order.delivery_slot_date} • {order.delivery_slot_window}</span>
+            {!isDelivered && (
+              <button 
+                type="button" 
+                onClick={() => setIsSlotPickerOpen(true)}
+                style={{ background: 'none', border: 'none', color: '#3A6B29', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.75rem', marginLeft: '0.4rem', fontWeight: 700 }}
+              >
+                Change
+              </button>
+            )}
+          </div>
+        ) : !isDelivered ? (
+          <button
+            type="button"
+            onClick={() => setIsSlotPickerOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.75rem',
+              color: 'var(--customer-muted)',
+              background: '#F6F5F2',
+              border: '1px dashed var(--customer-border)',
+              padding: '0.35rem 0.75rem',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            <Calendar size={13} />
+            <span>+ Book 2-Hour Delivery Slot</span>
+          </button>
+        ) : null}
+
+        {/* Change Request Button if order not delivered and no pending proposal */}
+        {!isDelivered && !order.active_change_proposal && (
+          <button
+            type="button"
+            onClick={() => setIsProposeModalOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.75rem',
+              color: 'var(--customer-muted)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              textDecoration: 'underline'
+            }}
+          >
+            <Edit3 size={12} />
+            <span>Request Changes</span>
+          </button>
+        )}
+      </div>
+
+      {/* Mutual Order Change Proposal Notification Banner */}
+      {order.active_change_proposal && (
+        <div style={{
+          padding: '0.85rem 1rem',
+          borderRadius: '14px',
+          background: order.active_change_proposal.proposed_by === 'vendor' ? '#EEF2FF' : '#FFFBEB',
+          border: order.active_change_proposal.proposed_by === 'vendor' ? '1px solid #C7D2FE' : '1px solid #FDE68A',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem'
+        }}>
+          <div>
+            <div style={{ 
+              fontSize: '0.825rem', 
+              fontWeight: 700, 
+              color: order.active_change_proposal.proposed_by === 'vendor' ? '#3730A3' : '#92400E' 
+            }}>
+              {order.active_change_proposal.proposed_by === 'vendor'
+                ? 'Vendor Proposed Order Modification'
+                : 'Change Proposal Pending Vendor Confirmation'}
+            </div>
+            <div style={{ 
+              fontSize: '0.75rem', 
+              color: order.active_change_proposal.proposed_by === 'vendor' ? '#4F46E5' : '#B45309',
+              marginTop: '0.15rem'
+            }}>
+              Proposed Total: ₹{order.active_change_proposal.proposed_total_amount} (Original: ₹{order.total_amount})
+              {order.active_change_proposal.reason && ` • "${order.active_change_proposal.reason}"`}
+            </div>
+          </div>
+
+          {order.active_change_proposal.proposed_by === 'vendor' ? (
+            <button
+              type="button"
+              onClick={() => setIsReviewModalOpen(true)}
+              className="customer-btn"
+              style={{
+                fontSize: '0.75rem',
+                padding: '0.4rem 0.8rem',
+                background: '#4F46E5',
+                color: '#FFFFFF',
+                borderRadius: '8px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Review & Respond
+            </button>
+          ) : (
+            <span style={{ 
+              fontSize: '0.75rem', 
+              fontWeight: 600, 
+              color: '#B45309',
+              background: '#FEF3C7',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '6px'
+            }}>
+              Pending Review
+            </span>
+          )}
+        </div>
+      )}
+
       {/* 4-Stage Visual Progress Timeline */}
-      <div style={{ position: 'relative', margin: '1rem 0' }}>
+      <div style={{ position: 'relative', margin: '0.5rem 0' }}>
         {/* Background Line */}
         <div style={{ 
           position: 'absolute', top: '12px', left: '0', right: '0', height: '2px', 
@@ -219,8 +398,9 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
         </div>
 
         <div>
-          {/* If unpaid and resident can pay via UPI */}
-          {isUnpaid && onPayUpi && (
+          {/* Phase D Payment Timing Gate: */}
+          {/* If unpaid and status is Ready or Delivered -> show Pay Now */}
+          {hasOutstandingDue && isPaymentUnlocked && onPayUpi && (
             <button
               type="button"
               className="customer-btn customer-btn-primary"
@@ -231,6 +411,24 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
             </button>
           )}
 
+          {/* If unpaid and status is Placed or Ironing -> Payment locked indicator */}
+          {hasOutstandingDue && !isPaymentUnlocked && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.75rem',
+              color: 'var(--customer-muted)',
+              background: '#F6F5F2',
+              padding: '0.4rem 0.75rem',
+              borderRadius: '9999px',
+              fontWeight: 600
+            }}>
+              <Lock size={12} />
+              <span>Pay unlocks when Ready</span>
+            </div>
+          )}
+
           {isDelivered && order.payment_status === 'paid' && (
             <span style={{ fontSize: '0.85rem', color: '#557A3C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <CheckCircle2 size={16} /> Order Completed
@@ -238,6 +436,38 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onPayUpi }) => {
           )}
         </div>
       </div>
+
+      {/* Modals */}
+      {/* 1. Delivery Slot Picker Modal */}
+      <DeliverySlotPickerModal
+        isOpen={isSlotPickerOpen}
+        onClose={() => setIsSlotPickerOpen(false)}
+        apartmentId={order.apartment_id || ''}
+        currentDate={order.delivery_slot_date}
+        currentWindow={order.delivery_slot_window}
+        onSelectSlot={handleBookSlot}
+      />
+
+      {/* 2. Propose Change Modal */}
+      <ProposeChangeModal
+        isOpen={isProposeModalOpen}
+        onClose={() => setIsProposeModalOpen(false)}
+        order={order}
+        callerRole="customer"
+        onSubmitProposal={handleProposeChange}
+      />
+
+      {/* 3. Review Change Modal */}
+      {order.active_change_proposal && (
+        <ReviewChangeModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          order={order}
+          proposal={order.active_change_proposal}
+          callerRole="customer"
+          onRespond={handleRespondToProposal}
+        />
+      )}
     </div>
   );
 };

@@ -96,7 +96,7 @@ This repository is pre-configured for zero-configuration static deployment:
 
 ---
 
-## Default Demo Credentials
+## Default Demo Credentials (Public App)
 
 - **Resident (Customer)**:
   - Flat: `A-101` | PIN: `1010` (Sharma Ji)
@@ -104,3 +104,15 @@ This repository is pre-configured for zero-configuration static deployment:
   - Flat: `B-302` | PIN: `3020` (Karthik Raja)
 - **Vendor**:
   - Login Key: `VENDOR` or `9876543210` | PIN: `1234`
+
+---
+
+## 🔒 Production Security & Dedicated Platform Admin Notice
+
+> [!CAUTION]
+> **CRITICAL SECURITY REQUIREMENT FOR PRODUCTION DEPLOYMENTS:**
+> 
+> 1. **Unlinked Route**: The Platform Owner operations console is completely separated from the resident and vendor app and is reachable **only** via the dedicated, unlinked route `/platform-admin`. It is not linked in any navigation menu, footer, sitemap, or public UI.
+> 2. **Immediate Credential Rotation**: The temporary bootstrap owner seed account (`SUPER_OWNER_KEY` / `9800000001` with default password `PressWala!Owner#2026`) is provided **strictly** for initial environment provisioning. You **MUST** change this password immediately upon real production deployment before onboarding vendors or residents.
+> 3. **Never Re-run Seed Scripts in Production**: Database seed migrations or scripts containing seed users must **never** be re-run against an active production database once a real Owner account exists, as doing so could overwrite production state or reintroduce default credentials.
+

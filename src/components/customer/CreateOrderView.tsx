@@ -15,14 +15,19 @@ import {
   CheckCircle2, 
   ShoppingBag,
   ArrowRight,
-  FileText
+  FileText,
+  AlertOctagon,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { AnimatedNumber } from '../common/AnimatedNumber';
 import { Skeleton } from '../common/Skeleton';
+import { DeliverySlotPickerModal } from '../common/DeliverySlotPickerModal';
 
 interface CreateOrderViewProps {
   onOrderCreated: (newOrder: Order) => void;
+  onNavigateToOrders?: () => void;
 }
 
 // Map icon string to Lucide icon
@@ -40,7 +45,7 @@ function renderGarmentIcon(iconName: string) {
   }
 }
 
-export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated }) => {
+export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated, onNavigateToOrders }) => {
   const { currentUser } = useAuth();
   const [garments, setGarments] = useState<GarmentType[]>([]);
   const [quantities, setQuantities] = useState<{ [garmentId: string]: number }>({});
@@ -49,14 +54,30 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Phase D: Due-based order blocking & Delivery Slot booking
+  const [outstandingBalance, setOutstandingBalance] = useState<number>(0);
+  const [selectedSlot, setSelectedSlot] = useState<{ date: string; window: string } | null>(null);
+  const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+
   useEffect(() => {
-    async function loadGarments() {
-      const items = await db.getGarmentTypes();
-      setGarments(items);
-      setIsLoading(false);
+    async function loadInitialData() {
+      if (!currentUser) return;
+      try {
+        const [items, balance] = await Promise.all([
+          db.getGarmentTypes(),
+          db.getCustomerBalance(currentUser.flat_number, currentUser.apartment_id)
+        ]);
+        setGarments(items);
+        setOutstandingBalance(balance.totalOutstanding);
+      } catch (err) {
+        console.error('Failed to load initial data:', err);
+      } finally {
+        setIsLoading(false);
+      }
     }
-    loadGarments();
-  }, []);
+    loadInitialData();
+  }, [currentUser]);
 
   const handleIncrement = (id: string) => {
     setQuantities(prev => ({
@@ -99,14 +120,27 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
 
   const handlePlaceOrder = async () => {
     if (!currentUser || selectedItemsList.length === 0) return;
+    if (outstandingBalance > 0) {
+      setSubmissionError(`Order creation blocked: You have an outstanding balance of ₹${outstandingBalance}. Please clear previous dues before creating a new order.`);
+      return;
+    }
+
     setIsSubmitting(true);
+    setSubmissionError(null);
     try {
-      const order = await db.createOrder(currentUser, selectedItemsList, specialInstructions.trim() || undefined);
+      const order = await db.createOrder(
+        currentUser,
+        selectedItemsList,
+        specialInstructions.trim() || undefined,
+        selectedSlot ? { date: selectedSlot.date, window: selectedSlot.window } : undefined
+      );
       setCreatedOrder(order);
       setQuantities({});
       setSpecialInstructions('');
-    } catch (err) {
+      setSelectedSlot(null);
+    } catch (err: any) {
       console.error('Failed to place order:', err);
+      setSubmissionError(err?.message || 'Failed to place order. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -119,6 +153,8 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
     }
   };
 
+  const isDueBlocked = outstandingBalance > 0;
+
   return (
     <div style={{ paddingBottom: '120px' }}>
       {/* Page Title & Instructions */}
@@ -130,6 +166,87 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
           Pick the quantity for each garment type. Your order total calculates automatically.
         </p>
       </div>
+
+      {/* Due-Based Order Blocking Alert Banner */}
+      {isDueBlocked && (
+        <div 
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1.25rem 1.5rem',
+            borderRadius: '20px',
+            background: '#FFF5F4',
+            border: '1.5px solid #F87171',
+            boxShadow: '0 4px 16px rgba(239, 68, 68, 0.08)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '1rem'
+          }}
+        >
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            background: '#FEE2E2',
+            color: '#DC2626',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <AlertOctagon size={24} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#991B1B', margin: '0 0 0.25rem 0' }}>
+              Order Placement Blocked — Outstanding Balance Due
+            </h4>
+            <p style={{ fontSize: '0.875rem', color: '#B91C1C', margin: '0 0 0.75rem 0', lineHeight: 1.4 }}>
+              You currently have an outstanding unpaid balance of <strong>₹{outstandingBalance}</strong>. Per society guidelines, previous laundry dues must be cleared before placing a new order.
+            </p>
+            {onNavigateToOrders && (
+              <button
+                type="button"
+                onClick={onNavigateToOrders}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '9999px',
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                <span>Pay Outstanding Dues Now</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {submissionError && (
+        <div 
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1rem 1.25rem',
+            borderRadius: '16px',
+            background: '#FEF2F2',
+            border: '1px solid #FCA5A5',
+            color: '#B91C1C',
+            fontSize: '0.875rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}
+        >
+          <AlertOctagon size={18} />
+          <span>{submissionError}</span>
+        </div>
+      )}
 
       {/* Garments Grid */}
       <div style={{ 
@@ -299,6 +416,113 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
         />
       </div>
 
+      {/* Delivery Slot Booking Card */}
+      <div 
+        className="customer-card"
+        style={{ 
+          padding: '1.5rem',
+          marginBottom: '2rem'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <label 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.4rem', 
+              fontSize: '0.85rem', 
+              fontWeight: 700, 
+              color: 'var(--customer-text)', 
+              margin: 0
+            }}
+          >
+            <Calendar size={16} color="var(--customer-muted)" />
+            Delivery Slot (Optional)
+            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--customer-muted)' }}>(Max 3 deliveries per slot)</span>
+          </label>
+          {selectedSlot && (
+            <button
+              type="button"
+              onClick={() => setSelectedSlot(null)}
+              style={{ background: 'none', border: 'none', color: '#B91C1C', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Clear Slot
+            </button>
+          )}
+        </div>
+
+        {selectedSlot ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '1rem 1.25rem',
+            background: 'var(--status-sage-bg)',
+            border: '1px solid var(--customer-accent)',
+            borderRadius: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '12px',
+                background: 'var(--customer-accent)',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Clock size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--customer-text)' }}>
+                  {new Date(selectedSlot.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#557A3C', fontWeight: 600 }}>
+                  {selectedSlot.window}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsSlotPickerOpen(true)}
+              className="customer-btn customer-btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
+            >
+              Change Slot
+            </button>
+          </div>
+        ) : (
+          <div style={{
+            padding: '1.25rem',
+            background: '#F6F5F2',
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--customer-text)', marginBottom: '0.2rem' }}>
+                No delivery slot selected
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--customer-muted)' }}>
+                Choose a 2-hour window so Ramu Dhobi drops off your clothes at the ideal time.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSlotPickerOpen(true)}
+              className="customer-btn customer-btn-secondary"
+              style={{ fontSize: '0.85rem', padding: '0.6rem 1rem', background: '#FFFFFF', fontWeight: 700 }}
+            >
+              <Calendar size={16} />
+              <span>Select Slot</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Sticky Bottom Order Bar */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
@@ -336,18 +560,25 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
             type="button"
             className="customer-btn customer-btn-primary"
             onClick={handlePlaceOrder}
-            disabled={totalItemsCount === 0 || isSubmitting}
+            disabled={totalItemsCount === 0 || isSubmitting || isDueBlocked}
             style={{ 
               minWidth: '180px',
               padding: '1rem 1.5rem',
               fontSize: '1.05rem',
-              opacity: totalItemsCount === 0 ? 0.6 : 1,
-              cursor: totalItemsCount === 0 ? 'not-allowed' : 'pointer'
+              opacity: (totalItemsCount === 0 || isDueBlocked) ? 0.6 : 1,
+              cursor: (totalItemsCount === 0 || isDueBlocked) ? 'not-allowed' : 'pointer',
+              background: isDueBlocked ? '#DC2626' : undefined
             }}
           >
             <ShoppingBag size={18} />
-            <span>{isSubmitting ? 'Placing Order...' : 'Place Order'}</span>
-            <ArrowRight size={18} />
+            <span>
+              {isSubmitting 
+                ? 'Placing Order...' 
+                : isDueBlocked 
+                ? `Blocked (Clear ₹${outstandingBalance})` 
+                : 'Place Order'}
+            </span>
+            {!isDueBlocked && <ArrowRight size={18} />}
           </button>
         </div>
       </div>
@@ -402,6 +633,14 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
                 <span style={{ color: 'var(--customer-muted)' }}>Total Clothes</span>
                 <span style={{ fontWeight: 700 }}>{totalItemsCount} items</span>
               </div>
+              {createdOrder.delivery_slot_date && createdOrder.delivery_slot_window && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+                  <span style={{ color: 'var(--customer-muted)' }}>Delivery Slot</span>
+                  <span style={{ fontWeight: 700, color: 'var(--customer-accent)' }}>
+                    {createdOrder.delivery_slot_date} ({createdOrder.delivery_slot_window})
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 800, paddingTop: '0.75rem', borderTop: '1px solid var(--customer-border)' }}>
                 <span>Estimated Total</span>
                 <span style={{ color: 'var(--customer-accent)' }}>₹{createdOrder.total_amount}</span>
@@ -418,6 +657,20 @@ export const CreateOrderView: React.FC<CreateOrderViewProps> = ({ onOrderCreated
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* Delivery Slot Picker Modal */}
+      {currentUser && (
+        <DeliverySlotPickerModal
+          isOpen={isSlotPickerOpen}
+          onClose={() => setIsSlotPickerOpen(false)}
+          apartmentId={currentUser.apartment_id || ''}
+          currentDate={selectedSlot?.date}
+          currentWindow={selectedSlot?.window}
+          onSelectSlot={(date, window) => {
+            setSelectedSlot({ date, window });
+          }}
+        />
       )}
     </div>
   );

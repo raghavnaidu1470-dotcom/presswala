@@ -6,13 +6,15 @@ import { PaymentSummaryBar } from './PaymentSummaryBar';
 import { OrderCard } from './OrderCard';
 import { CreateOrderView } from './CreateOrderView';
 import { UpiPaymentModal } from './UpiPaymentModal';
+import { ManageContactsModal } from '../common/ManageContactsModal';
 import { Skeleton } from '../common/Skeleton';
 import { 
   PlusCircle, 
   Clock, 
   RotateCw, 
   PackageSearch, 
-  ShoppingBag 
+  ShoppingBag,
+  Phone
 } from 'lucide-react';
 
 export const CustomerPortal: React.FC = () => {
@@ -24,6 +26,7 @@ export const CustomerPortal: React.FC = () => {
   const [totalOutstanding, setTotalOutstanding] = useState<number>(0);
   const [isUpiModalOpen, setIsUpiModalOpen] = useState(false);
   const [selectedOrderForUpi, setSelectedOrderForUpi] = useState<Order | null>(null);
+  const [isManageContactsOpen, setIsManageContactsOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -31,10 +34,13 @@ export const CustomerPortal: React.FC = () => {
     if (!currentUser) return;
     setIsRefreshing(true);
     try {
-      const customerOrders = await db.getOrders({ flatNumber: currentUser.flat_number });
+      const customerOrders = await db.getOrders({ 
+        flatNumber: currentUser.flat_number,
+        apartmentId: currentUser.apartment_id 
+      });
       setOrders(customerOrders);
 
-      const balance = await db.getCustomerBalance(currentUser.flat_number);
+      const balance = await db.getCustomerBalance(currentUser.flat_number, currentUser.apartment_id);
       setTotalPaid(balance.totalPaid);
       setTotalOutstanding(balance.totalOutstanding);
     } catch (err) {
@@ -228,6 +234,36 @@ export const CustomerPortal: React.FC = () => {
       `}</style>
 
       <div className="customer-main-content">
+        {/* Resident Community Greeting */}
+        <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 0.2rem 0', color: 'var(--customer-text)' }}>
+              Namaste, {currentUser?.name || 'Resident'}!
+            </h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--customer-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span>{currentUser?.block ? `${currentUser.block} • ` : ''}Flat {currentUser?.flat_number}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsManageContactsOpen(true)}
+            className="customer-btn customer-btn-secondary"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.8rem',
+              padding: '0.45rem 0.85rem',
+              borderRadius: '10px'
+            }}
+            title="Manage registered contact numbers (up to 5)"
+          >
+            <Phone size={14} />
+            <span>Manage Numbers</span>
+          </button>
+        </div>
+
         {/* Payment Summary Bar */}
         <PaymentSummaryBar
           totalPaid={totalPaid}
@@ -272,7 +308,10 @@ export const CustomerPortal: React.FC = () => {
 
         {/* Tab 1: Create Order */}
         {activeTab === 'create' && (
-          <CreateOrderView onOrderCreated={handleOrderCreated} />
+          <CreateOrderView 
+            onOrderCreated={handleOrderCreated} 
+            onNavigateToOrders={() => setActiveTab('orders')}
+          />
         )}
 
         {/* Tab 2: My Orders */}
@@ -316,6 +355,7 @@ export const CustomerPortal: React.FC = () => {
                     key={order.id}
                     order={order}
                     onPayUpi={handlePayUpiForOrder}
+                    onOrderUpdated={fetchCustomerData}
                   />
                 ))}
               </div>
@@ -351,6 +391,18 @@ export const CustomerPortal: React.FC = () => {
           amount={selectedOrderForUpi ? (selectedOrderForUpi.total_amount - selectedOrderForUpi.paid_amount) : totalOutstanding}
           onPaymentSuccess={fetchCustomerData}
         />
+
+        {/* Manage Contacts Modal (Phase C) */}
+        {currentUser && (
+          <ManageContactsModal
+            isOpen={isManageContactsOpen}
+            onClose={() => setIsManageContactsOpen(false)}
+            customerId={currentUser.id}
+            residentName={currentUser.name}
+            flatNumber={currentUser.flat_number}
+            onUpdated={fetchCustomerData}
+          />
+        )}
       </div>
     </div>
   );

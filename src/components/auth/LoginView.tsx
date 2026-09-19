@@ -1,25 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { INITIAL_USERS } from '../../services/seedData';
-import { User } from '../../types';
+import { User, Apartment } from '../../types';
+import { db } from '../../services/db';
 import { validators } from '../../utils/validators';
 import { loginSecurity } from '../../services/loginSecurity';
 import { 
   Building2, 
   Sparkles, 
-  UserCheck, 
   ArrowRight, 
-  AlertCircle,
-  ShieldCheck,
-  Zap,
-  KeyRound,
-  Clock,
-  MessageCircle,
-  Phone
+  AlertCircle, 
+  ShieldCheck, 
+  Zap, 
+  KeyRound, 
+  Clock, 
+  MessageCircle, 
+  Phone,
+  CheckCircle2
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
-  const { login, registerResident, switchDemoUser } = useAuth();
+  const { login, requestResidentAccess, switchDemoUser } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'resident' | 'vendor' | 'register' | 'forgot'>('resident');
   
@@ -29,11 +30,14 @@ export const LoginView: React.FC = () => {
   const [vendorKey, setVendorKey] = useState('VENDOR');
   const [vendorPassword, setVendorPassword] = useState('Demo@1234');
 
-  // Register Form State
+  // Request Access Form State
+  const [apartments, setApartments] = useState<Apartment[]>([]);
+  const [selectedApartmentId, setSelectedApartmentId] = useState('');
   const [regName, setRegName] = useState('');
-  const [regFlat, setRegFlat] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regPassword, setRegPassword] = useState('');
+  const [regBlock, setRegBlock] = useState('');
+  const [regFlat, setRegFlat] = useState('');
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
 
   // Forgot Password Assistance State
   const [forgotFlat, setForgotFlat] = useState('');
@@ -46,6 +50,21 @@ export const LoginView: React.FC = () => {
   const apartmentName = import.meta.env.VITE_APARTMENT_NAME || 'Palm Heights Apartments';
   const vendorName = import.meta.env.VITE_VENDOR_NAME || 'Ramu Dhobi';
   const vendorPhone = import.meta.env.VITE_VENDOR_PHONE || '9876543210';
+
+  useEffect(() => {
+    const loadApartments = async () => {
+      try {
+        const list = await db.getApartments();
+        setApartments(list);
+        if (list.length > 0) {
+          setSelectedApartmentId(list[0].id);
+        }
+      } catch (e) {
+        console.warn('Failed to load apartments:', e);
+      }
+    };
+    loadApartments();
+  }, []);
 
   // Check lockout on active key change
   useEffect(() => {
@@ -135,14 +154,14 @@ export const LoginView: React.FC = () => {
     e.preventDefault();
     setError(null);
     if (!vendorKey.trim() || !vendorPassword.trim()) {
-      setError('Please enter Vendor ID and Password');
+      setError('Please enter Vendor ID / Phone and Password');
       return;
     }
 
     const lockout = loginSecurity.checkLockout(vendorKey);
     if (lockout.isLocked) {
       setLockoutRemaining(lockout.remainingSeconds);
-      setError(`Too many failed attempts. Vendor account locked for ${Math.ceil(lockout.remainingSeconds / 60)} minute(s).`);
+      setError(`Too many failed attempts. Account locked for ${Math.ceil(lockout.remainingSeconds / 60)} minute(s).`);
       return;
     }
 
@@ -169,10 +188,14 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRequestAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!regName.trim() || !regFlat.trim() || !regPhone.trim() || !regPassword.trim()) {
+    if (!selectedApartmentId) {
+      setError('Please select your apartment');
+      return;
+    }
+    if (!regName.trim() || !regBlock.trim() || !regFlat.trim() || !regPhone.trim()) {
       setError('Please fill in all fields');
       return;
     }
@@ -181,8 +204,13 @@ export const LoginView: React.FC = () => {
       setError('Name can only contain alphabets and spaces (minimum 2 characters)');
       return;
     }
-    
-    const normalizedFlat = validators.normalizeFlatNumber(regFlat);
+
+    let formattedFlat = regFlat.trim().toUpperCase();
+    if (!formattedFlat.includes('-') && regBlock.trim()) {
+      const blockLetter = regBlock.trim().replace(/[^a-zA-Z]/g, '')[0] || 'A';
+      formattedFlat = `${blockLetter}-${formattedFlat}`;
+    }
+    const normalizedFlat = validators.normalizeFlatNumber(formattedFlat);
     if (!validators.isValidFlatNumber(normalizedFlat)) {
       setError('Flat number must be an alphabet, a hyphen, and 4 digits (e.g., S-3907 or A-1001)');
       return;
@@ -192,17 +220,19 @@ export const LoginView: React.FC = () => {
       setError('Phone number must be exactly 10 digits');
       return;
     }
-    
-    if (!validators.isValidPassword(regPassword)) {
-      setError('Password must be min 6 characters and include an uppercase, lowercase, digit, and special character');
-      return;
-    }
 
     setIsSubmitting(true);
     try {
-      await registerResident(regName, normalizedFlat, regPhone, regPassword);
+      await requestResidentAccess(
+        regName.trim(),
+        regPhone.trim(),
+        regBlock.trim(),
+        normalizedFlat,
+        selectedApartmentId
+      );
+      setRequestSubmitted(true);
     } catch (err: any) {
-      setError(err.message || 'Registration failed');
+      setError(err.message || 'Request submission failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -458,10 +488,10 @@ export const LoginView: React.FC = () => {
             <div className="login-tabs">
               <button
                 type="button"
-                className={`login-tab ${activeTab === 'resident' ? 'active' : ''}`}
+                className={`login-tab ${activeTab === 'resident' || activeTab === 'register' ? 'active' : ''}`}
                 onClick={() => switchTab('resident')}
               >
-                <Building2 size={16} />
+                <Building2 size={15} />
                 Resident
               </button>
               <button
@@ -469,16 +499,8 @@ export const LoginView: React.FC = () => {
                 className={`login-tab ${activeTab === 'vendor' ? 'active' : ''}`}
                 onClick={() => switchTab('vendor')}
               >
-                <ShieldCheck size={16} />
+                <ShieldCheck size={15} />
                 Vendor
-              </button>
-              <button
-                type="button"
-                className={`login-tab ${activeTab === 'register' ? 'active' : ''}`}
-                onClick={() => switchTab('register')}
-              >
-                <UserCheck size={16} />
-                New Flat
               </button>
             </div>
           )}
@@ -573,9 +595,14 @@ export const LoginView: React.FC = () => {
                 {lockoutRemaining > 0 ? <Clock size={20} /> : <ArrowRight size={20} />}
               </button>
               
-              <button type="button" className="forgot-link" onClick={() => switchTab('forgot')}>
-                Forgot Password?
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem' }}>
+                <button type="button" className="forgot-link" onClick={() => { setRequestSubmitted(false); switchTab('register'); }}>
+                  New Resident? Request Access
+                </button>
+                <button type="button" className="forgot-link" onClick={() => switchTab('forgot')}>
+                  Forgot Password?
+                </button>
+              </div>
             </form>
           )}
 
@@ -594,7 +621,7 @@ export const LoginView: React.FC = () => {
               </div>
 
               <div>
-                <label className="login-label">Staff Password</label>
+                <label className="login-label">Vendor Password</label>
                 <input
                   type="password"
                   className="login-input"
@@ -616,74 +643,161 @@ export const LoginView: React.FC = () => {
                     ? `Locked (${Math.floor(lockoutRemaining / 60)}m ${lockoutRemaining % 60}s)` 
                     : isSubmitting 
                     ? 'Verifying...' 
-                    : 'Access Vendor Dashboard'}
+                    : 'Access Vendor Portal'}
                 </span>
               </button>
+
             </form>
           )}
 
-          {/* Register Flat Form */}
+          {/* Request Access Form (Phase B) */}
           {activeTab === 'register' && (
-            <form onSubmit={handleRegister}>
-              <div>
-                <label className="login-label">Resident Full Name</label>
-                <input
-                  type="text"
-                  className="login-input"
-                  placeholder="e.g. Rajesh Kumar"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
-                  style={{ marginBottom: '0.85rem' }}
-                />
-              </div>
+            <div>
+              {requestSubmitted ? (
+                <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                  <div style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: '#DCFCE7',
+                    color: '#16A34A',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '1rem'
+                  }}>
+                    <CheckCircle2 size={34} />
+                  </div>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--login-text)' }}>
+                    Access Request Submitted!
+                  </h3>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--login-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+                    Your request for <strong>{regFlat.toUpperCase()}</strong> at <strong>{apartments.find(a => a.id === selectedApartmentId)?.name || 'your apartment'}</strong> has been sent to the apartment vendor for verification.
+                  </p>
+                  
+                  <div style={{ background: '#F6F5F2', borderRadius: '16px', padding: '1.1rem', fontSize: '0.85rem', color: 'var(--login-muted)', textAlign: 'left', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+                    <div style={{ fontWeight: 700, color: 'var(--login-text)', marginBottom: '0.35rem' }}>Next steps:</div>
+                    <ul style={{ paddingLeft: '1.2rem', margin: 0 }}>
+                      <li>Vendor verifies flat residency in their apartment directory.</li>
+                      <li>Once approved, your account is immediately activated.</li>
+                      <li>Sign in with your Flat Number and password.</li>
+                    </ul>
+                  </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label className="login-label">Flat Number</label>
-                  <input
-                    type="text"
-                    className="login-input"
-                    placeholder="e.g. S-3907"
-                    maxLength={6}
-                    value={regFlat}
-                    onChange={(e) => setRegFlat(e.target.value.toUpperCase())}
-                    style={{ marginBottom: '0.85rem' }}
-                  />
+                  <button
+                    type="button"
+                    className="login-btn"
+                    onClick={() => {
+                      setRequestSubmitted(false);
+                      setFlatNumber(regFlat.trim().toUpperCase());
+                      switchTab('resident');
+                    }}
+                  >
+                    <span>Back to Resident Sign In</span>
+                    <ArrowRight size={18} />
+                  </button>
                 </div>
-                <div>
-                  <label className="login-label">Mobile Number</label>
-                  <input
-                    type="tel"
-                    className="login-input"
-                    placeholder="10-digit number"
-                    maxLength={10}
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    style={{ marginBottom: '0.85rem' }}
-                  />
-                </div>
-              </div>
+              ) : (
+                <form onSubmit={handleRequestAccess}>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="login-label">Apartment Community</label>
+                    <select
+                      className="login-input"
+                      value={selectedApartmentId}
+                      onChange={(e) => setSelectedApartmentId(e.target.value)}
+                      style={{ marginBottom: 0 }}
+                    >
+                      {apartments.map(apt => (
+                        <option key={apt.id} value={apt.id}>
+                          {apt.name} — {apt.address}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="login-label">Set Complex Password</label>
-                <input
-                  type="password"
-                  className="login-input"
-                  placeholder="Upper, lower, digit, special char"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                />
-              </div>
+                  <div>
+                    <label className="login-label">Resident Full Name</label>
+                    <input
+                      type="text"
+                      className="login-input"
+                      placeholder="e.g. Rajesh Kumar"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                      style={{ marginBottom: '0.85rem' }}
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                className="login-btn"
-                disabled={isSubmitting}
-              >
-                <span>{isSubmitting ? 'Registering...' : 'Save & Enter Flat Portal'}</span>
-                <ArrowRight size={20} />
-              </button>
-            </form>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                    <div>
+                      <label className="login-label">Block / Tower</label>
+                      <input
+                        type="text"
+                        className="login-input"
+                        placeholder="e.g. Tower A"
+                        value={regBlock}
+                        onChange={(e) => setRegBlock(e.target.value)}
+                        style={{ marginBottom: 0 }}
+                      />
+                    </div>
+                    <div>
+                      <label className="login-label">Flat Number</label>
+                      <input
+                        type="text"
+                        className="login-input"
+                        placeholder="e.g. A-1001"
+                        maxLength={6}
+                        value={regFlat}
+                        onChange={(e) => setRegFlat(e.target.value.toUpperCase())}
+                        style={{ marginBottom: 0 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="login-label">Mobile Number</label>
+                    <input
+                      type="tel"
+                      className="login-input"
+                      placeholder="10-digit number"
+                      maxLength={10}
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      style={{ marginBottom: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div style={{ 
+                    padding: '0.75rem 0.9rem', 
+                    background: 'rgba(0, 0, 0, 0.03)', 
+                    borderRadius: '8px', 
+                    marginBottom: '1rem', 
+                    fontSize: '0.825rem', 
+                    color: 'var(--login-muted)',
+                    lineHeight: '1.4'
+                  }}>
+                    🛡️ <strong>Security Note:</strong> Passwords are not collected in join requests. Once the vendor verifies and approves your flat, your account will be activated.
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="login-btn"
+                    disabled={isSubmitting}
+                  >
+                    <span>{isSubmitting ? 'Submitting Request...' : 'Request Access to Apartment'}</span>
+                    <ArrowRight size={20} />
+                  </button>
+
+                  <button 
+                    type="button" 
+                    className="forgot-link" 
+                    onClick={() => switchTab('resident')}
+                    style={{ marginTop: '1.25rem' }}
+                  >
+                    Already registered? Back to Resident Sign In
+                  </button>
+                </form>
+              )}
+            </div>
           )}
 
           {/* Forgot Password Flow */}
@@ -783,59 +897,101 @@ export const LoginView: React.FC = () => {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {/* Ramu Dhobi (Vendor) */}
-            <button
-              type="button"
-              className="demo-option"
-              onClick={() => handleQuickSwitch(INITIAL_USERS[0])}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9333EA' }}>
-                  <ShieldCheck size={22} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Ramu Dhobi (Vendor)</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--login-muted)' }}>Dashboard & deliveries</div>
-                </div>
-              </div>
-              <span className="demo-badge demo-badge-vendor">Vendor</span>
-            </button>
+            {/* Ramu Dhobi (Active Vendor) */}
+            {(() => {
+              const ramu = INITIAL_USERS.find(u => u.flat_number === 'VENDOR');
+              if (!ramu) return null;
+              return (
+                <button
+                  type="button"
+                  className="demo-option"
+                  onClick={() => handleQuickSwitch(ramu)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9333EA' }}>
+                      <ShieldCheck size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Ramu Dhobi (Active Vendor)</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--login-muted)' }}>Palm Heights • Orders & price list</div>
+                    </div>
+                  </div>
+                  <span className="demo-badge demo-badge-vendor">Active</span>
+                </button>
+              );
+            })()}
+
+            {/* Suresh Laundry (Pending Vendor) */}
+            {(() => {
+              const suresh = INITIAL_USERS.find(u => u.flat_number === 'VENDOR-SURESH');
+              if (!suresh) return null;
+              return (
+                <button
+                  type="button"
+                  className="demo-option"
+                  onClick={() => handleQuickSwitch(suresh)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(212, 163, 115, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8F6235' }}>
+                      <Clock size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Suresh Laundry (Pending)</div>
+                      <div style={{ fontSize: '0.8rem', color: '#8F6235' }}>Green Glen Villas • Pending Approval</div>
+                    </div>
+                  </div>
+                  <span className="demo-badge" style={{ background: 'rgba(212, 163, 115, 0.2)', color: '#8F6235' }}>Pending</span>
+                </button>
+              );
+            })()}
 
             {/* Pooja Verma (A-2004 - Has Outstanding Due) */}
-            <button
-              type="button"
-              className="demo-option"
-              onClick={() => handleQuickSwitch(INITIAL_USERS[2])}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
-                  <Building2 size={22} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Pooja Verma (A-2004)</div>
-                  <div style={{ fontSize: '0.8rem', color: '#DC2626' }}>⚠️ ₹110 Unpaid Order</div>
-                </div>
-              </div>
-              <span className="demo-badge demo-badge-due">₹110 Due</span>
-            </button>
+            {(() => {
+              const pooja = INITIAL_USERS.find(u => u.flat_number === 'A-2004');
+              if (!pooja) return null;
+              return (
+                <button
+                  type="button"
+                  className="demo-option"
+                  onClick={() => handleQuickSwitch(pooja)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
+                      <Building2 size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Pooja Verma (A-2004)</div>
+                      <div style={{ fontSize: '0.8rem', color: '#DC2626' }}>⚠️ ₹110 Unpaid Order</div>
+                    </div>
+                  </div>
+                  <span className="demo-badge demo-badge-due">₹110 Due</span>
+                </button>
+              );
+            })()}
 
             {/* Sharma Ji (A-1001 - Active Order) */}
-            <button
-              type="button"
-              className="demo-option"
-              onClick={() => handleQuickSwitch(INITIAL_USERS[1])}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284C7' }}>
-                  <Building2 size={22} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Sharma Ji (A-1001)</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--login-muted)' }}>Active order in progress</div>
-                </div>
-              </div>
-              <span className="demo-badge demo-badge-customer">A-1001</span>
-            </button>
+            {(() => {
+              const sharma = INITIAL_USERS.find(u => u.flat_number === 'A-1001');
+              if (!sharma) return null;
+              return (
+                <button
+                  type="button"
+                  className="demo-option"
+                  onClick={() => handleQuickSwitch(sharma)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284C7' }}>
+                      <Building2 size={22} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--login-text)' }}>Sharma Ji (A-1001)</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--login-muted)' }}>Active order in progress</div>
+                    </div>
+                  </div>
+                  <span className="demo-badge demo-badge-customer">A-1001</span>
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>

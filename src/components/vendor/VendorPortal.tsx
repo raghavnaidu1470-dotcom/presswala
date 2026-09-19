@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/db';
 import { Order, DashboardMetrics, PaymentMethod } from '../../types';
 import { OrderManagementView } from './OrderManagementView';
 import { OutstandingPaymentsView } from './OutstandingPaymentsView';
 import { CustomerDirectoryView } from './CustomerDirectoryView';
+import { PendingRequestsView } from './PendingRequestsView';
 import { DailyReportView } from './DailyReportView';
+import { BlockDashboardView } from './BlockDashboardView';
 import { PriceListEditorModal } from './PriceListEditorModal';
 import { DeliveryPaymentPromptModal } from './DeliveryPaymentPromptModal';
 import { AnimatedNumber } from '../common/AnimatedNumber';
@@ -18,13 +21,17 @@ import {
   RotateCw, 
   Tag, 
   BarChart3, 
-  ShoppingBag
+  ShoppingBag,
+  UserCheck,
+  Building2
 } from 'lucide-react';
 
 export const VendorPortal: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'outstanding' | 'customers' | 'reports'>('orders');
+  const { currentUser } = useAuth();
+  const [activeTab, setActiveTab] = useState<'blocks' | 'orders' | 'outstanding' | 'customers' | 'requests' | 'reports'>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Delivery Payment Modal State
@@ -37,12 +44,15 @@ export const VendorPortal: React.FC = () => {
   const fetchVendorData = async () => {
     setIsRefreshing(true);
     try {
-      const [allOrders, m] = await Promise.all([
-        db.getOrders(),
-        db.getDashboardMetrics()
+      const aptId = currentUser?.apartment_id;
+      const [allOrders, m, pendingReqs] = await Promise.all([
+        db.getOrders({ apartmentId: aptId }),
+        db.getDashboardMetrics(aptId),
+        db.getPendingJoinRequests(aptId)
       ]);
       setOrders(allOrders);
       setMetrics(m);
+      setPendingRequestsCount(pendingReqs.length);
     } catch (err) {
       console.error('Error loading vendor data:', err);
     } finally {
@@ -52,7 +62,7 @@ export const VendorPortal: React.FC = () => {
 
   useEffect(() => {
     fetchVendorData();
-  }, []);
+  }, [currentUser?.apartment_id]);
 
   const handleRequestDeliveryPayment = (order: Order) => {
     setSelectedOrderForDelivery(order);
@@ -347,6 +357,14 @@ export const VendorPortal: React.FC = () => {
           <div className="vendor-tabs">
             <button
               type="button"
+              className={`vendor-tab ${activeTab === 'blocks' ? 'active' : ''}`}
+              onClick={() => setActiveTab('blocks')}
+            >
+              <Building2 size={16} />
+              <span>Blocks</span>
+            </button>
+            <button
+              type="button"
               className={`vendor-tab ${activeTab === 'orders' ? 'active' : ''}`}
               onClick={() => setActiveTab('orders')}
             >
@@ -369,6 +387,17 @@ export const VendorPortal: React.FC = () => {
             >
               <Users size={16} />
               <span>Flats</span>
+            </button>
+            <button
+              type="button"
+              className={`vendor-tab ${activeTab === 'requests' ? 'active' : ''}`}
+              onClick={() => setActiveTab('requests')}
+              style={pendingRequestsCount > 0 ? { color: '#B45309', fontWeight: 700 } : {}}
+            >
+              <UserCheck size={16} />
+              <span>
+                Requests {pendingRequestsCount > 0 ? `(${pendingRequestsCount})` : ''}
+              </span>
             </button>
             <button
               type="button"
@@ -402,6 +431,15 @@ export const VendorPortal: React.FC = () => {
           </div>
         </div>
 
+        {/* Tab 0: Block Dashboard (Phase C) */}
+        {activeTab === 'blocks' && (
+          <BlockDashboardView
+            apartmentId={currentUser?.apartment_id}
+            apartmentName={currentUser?.apartment_name}
+            onNavigateToOrders={() => setActiveTab('orders')}
+          />
+        )}
+
         {/* Tab 1: Orders Management */}
         {activeTab === 'orders' && (
           <OrderManagementView
@@ -425,7 +463,15 @@ export const VendorPortal: React.FC = () => {
 
         {/* Tab 3: Customers Directory */}
         {activeTab === 'customers' && (
-          <CustomerDirectoryView />
+          <CustomerDirectoryView vendorApartmentId={currentUser?.apartment_id} />
+        )}
+
+        {/* Tab: Join Requests */}
+        {activeTab === 'requests' && (
+          <PendingRequestsView
+            vendorApartmentId={currentUser?.apartment_id}
+            onRequestProcessed={fetchVendorData}
+          />
         )}
 
         {/* Tab 4: Reports & Analytics */}

@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
-import { db } from '../../services/db';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  CheckCircle2, 
   ExternalLink, 
   Copy, 
-  Check 
+  Check,
+  Info
 } from 'lucide-react';
 
 interface UpiPaymentModalProps {
@@ -14,20 +13,16 @@ interface UpiPaymentModalProps {
   onClose: () => void;
   orderId?: string | null;
   amount: number;
-  onPaymentSuccess: () => void;
+  onPaymentSuccess?: () => void;
 }
 
 export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
   isOpen,
   onClose,
-  orderId,
-  amount,
-  onPaymentSuccess
+  amount
 }) => {
   const { currentUser } = useAuth();
-  const [utrNumber, setUtrNumber] = useState('');
   const [copied, setCopied] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const vendorUpi = import.meta.env.VITE_VENDOR_UPI_ID || 'dhobi@upi';
   const vendorName = import.meta.env.VITE_VENDOR_NAME || 'Ramu Dhobi';
@@ -38,29 +33,6 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
     navigator.clipboard?.writeText(vendorUpi);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleConfirmUpiPayment = async () => {
-    if (!currentUser) return;
-    setIsSubmitting(true);
-    try {
-      await db.recordPayment({
-        order_id: orderId || null,
-        customer_id: currentUser.id,
-        flat_number: currentUser.flat_number,
-        amount: amount,
-        payment_method: 'upi',
-        reference_id: utrNumber.trim() || `UPI-${Date.now().toString().slice(-6)}`,
-        notes: `Resident online payment for Flat ${currentUser.flat_number}`
-      });
-
-      onPaymentSuccess();
-      onClose();
-    } catch (err) {
-      console.error('Payment record failed:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   return (
@@ -110,65 +82,56 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
           </button>
         </div>
 
-        {/* Mobile 1-Tap UPI Launch */}
+        {/* Mobile 1-Tap UPI Deep Link Launch */}
         <div style={{ marginBottom: '1.5rem' }}>
           <a
             href={upiDeepLink}
             className="btn btn-primary btn-lg"
             style={{ 
               width: '100%', 
-              textDecoration: 'none'
+              textDecoration: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
             }}
           >
             <ExternalLink size={18} />
-            <span>Open in GPay / PhonePe / Paytm</span>
+            <span>Open in UPI App (GPay / PhonePe / Paytm)</span>
           </a>
         </div>
 
-        {/* Manual Confirmation Section */}
+        {/* Informational Notice: Vendor Confirms Payment */}
         <div 
           style={{ 
-            background: '#F6F5F2', 
+            background: '#F0F9FF', 
             borderRadius: '16px', 
-            padding: '1.25rem',
+            padding: '1rem 1.25rem',
             textAlign: 'left',
-            border: '1px solid rgba(0, 0, 0, 0.06)'
+            border: '1px solid #BAE6FD',
+            display: 'flex',
+            gap: '0.75rem',
+            alignItems: 'flex-start',
+            marginBottom: '1.5rem'
           }}
         >
-          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
-            Already transferred?
+          <Info size={20} color="#0284C7" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ fontSize: '0.8rem', color: '#0369A1', lineHeight: 1.45 }}>
+            <strong style={{ display: 'block', color: '#0C4A6E', marginBottom: '0.2rem' }}>
+              Vendor Payment Verification
+            </strong>
+            This deep-link prepares the transfer in your UPI app. Per society security policy, {vendorName} will independently verify credit in their bank account and record the payment receipt on the portal (or confirm during delivery).
           </div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.85rem', lineHeight: 1.4 }}>
-            Enter your UPI Reference/UTR number (optional) to update your flat's ledger immediately:
-          </p>
-          <input
-            type="text"
-            placeholder="e.g. 428192849182"
-            value={utrNumber}
-            onChange={(e) => setUtrNumber(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.75rem 1rem',
-              borderRadius: '12px',
-              background: '#FFFFFF',
-              border: '1px solid rgba(0, 0, 0, 0.1)',
-              color: 'var(--text-primary)',
-              fontSize: '0.9rem',
-              marginBottom: '0.85rem',
-              outline: 'none'
-            }}
-          />
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleConfirmUpiPayment}
-            disabled={isSubmitting}
-            style={{ width: '100%', padding: '0.75rem' }}
-          >
-            <CheckCircle2 size={16} />
-            <span>{isSubmitting ? 'Recording...' : 'Mark as Paid & Clear Due'}</span>
-          </button>
         </div>
+
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={onClose}
+          style={{ width: '100%', padding: '0.75rem', fontWeight: 600 }}
+        >
+          Done
+        </button>
       </div>
     </Modal>
   );

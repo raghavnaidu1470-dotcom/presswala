@@ -1,17 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { CustomerSummary } from '../../types';
+import { CustomerSummary, CustomerContact } from '../../types';
 import { db } from '../../services/db';
 import { Modal } from '../common/Modal';
+import { ContactPickerModal } from '../common/ContactPickerModal';
+import { ManageContactsModal } from '../common/ManageContactsModal';
 import { validators } from '../../utils/validators';
 import { 
   Search, 
   MessageCircle, 
   CheckCircle2,
   Users,
-  KeyRound
+  KeyRound,
+  UserX,
+  AlertTriangle,
+  Phone
 } from 'lucide-react';
 
-export const CustomerDirectoryView: React.FC = () => {
+interface CustomerDirectoryViewProps {
+  vendorApartmentId?: string;
+}
+
+export const CustomerDirectoryView: React.FC<CustomerDirectoryViewProps> = ({ vendorApartmentId }) => {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [search, setSearch] = useState('');
   
@@ -22,13 +31,46 @@ export const CustomerDirectoryView: React.FC = () => {
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
 
+  // Revoke Resident Access Modal State
+  const [revokeModalCustomer, setRevokeModalCustomer] = useState<CustomerSummary | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  // WhatsApp Contact Picker Modal State
+  const [contactPicker, setContactPicker] = useState<{
+    isOpen: boolean;
+    residentName: string;
+    flatNumber: string;
+    contacts: CustomerContact[];
+    message?: string;
+  }>({
+    isOpen: false,
+    residentName: '',
+    flatNumber: '',
+    contacts: []
+  });
+
+  // Manage Contacts Modal State
+  const [manageModal, setManageModal] = useState<{
+    isOpen: boolean;
+    customerId: string;
+    residentName: string;
+    flatNumber: string;
+  }>({
+    isOpen: false,
+    customerId: '',
+    residentName: '',
+    flatNumber: ''
+  });
+
+  const loadDirectory = async () => {
+    const data = await db.getCustomerSummaries(vendorApartmentId);
+    setCustomers(data);
+  };
+
   useEffect(() => {
-    async function loadDirectory() {
-      const data = await db.getCustomerSummaries();
-      setCustomers(data);
-    }
     loadDirectory();
-  }, []);
+  }, [vendorApartmentId]);
 
   const handleOpenResetModal = (customer: CustomerSummary) => {
     setResetModalCustomer(customer);
@@ -59,6 +101,21 @@ export const CustomerDirectoryView: React.FC = () => {
       setResetError(err.message || 'Failed to reset resident password');
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleConfirmRevoke = async () => {
+    if (!revokeModalCustomer) return;
+    setIsRevoking(true);
+    setRevokeError(null);
+    try {
+      await db.revokeResidentAccess(revokeModalCustomer.customer_id);
+      setRevokeModalCustomer(null);
+      await loadDirectory();
+    } catch (err: any) {
+      setRevokeError(err.message || 'Failed to revoke resident access');
+    } finally {
+      setIsRevoking(false);
     }
   };
 
@@ -105,9 +162,6 @@ export const CustomerDirectoryView: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
         {filtered.map(c => {
           const hasDue = c.outstanding_balance > 0;
-          const whatsappLink = `https://wa.me/91${c.customer_phone}?text=${encodeURIComponent(
-            `Namaste ${c.customer_name} ji, this is Ramu Dhobi. Hope your clothes were well-ironed. Let me know when you have clothes for ironing next!`
-          )}`;
 
           return (
             <div 
@@ -130,32 +184,114 @@ export const CustomerDirectoryView: React.FC = () => {
                     }}>
                       Flat {c.flat_number}
                     </span>
+                    {c.status === 'revoked' && (
+                      <span style={{
+                        background: '#FEE2E2',
+                        color: '#DC2626',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '6px'
+                      }}>
+                        Revoked
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--vendor-text)' }}>
                     {c.customer_name}
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--vendor-muted)' }}>
-                    {c.customer_phone}
+                  <div style={{ fontSize: '0.85rem', color: 'var(--vendor-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem' }}>
+                    <span>{c.customer_phone}</span>
+                    {c.contacts && c.contacts.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setManageModal({
+                          isOpen: true,
+                          customerId: c.customer_id,
+                          residentName: c.customer_name,
+                          flatNumber: c.flat_number
+                        })}
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          padding: '0.1rem 0.4rem',
+                          borderRadius: '6px',
+                          background: '#EEF2FF',
+                          color: '#4F46E5',
+                          border: '1px solid #C7D2FE',
+                          cursor: 'pointer'
+                        }}
+                        title="View all registered numbers"
+                      >
+                        +{c.contacts.length - 1} more
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {c.customer_phone && (
-                  <a
-                    href={whatsappLink}
-                    target="_blank"
-                    rel="noreferrer"
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setManageModal({
+                      isOpen: true,
+                      customerId: c.customer_id,
+                      residentName: c.customer_name,
+                      flatNumber: c.flat_number
+                    })}
                     style={{
                       width: '36px', height: '36px', borderRadius: '50%',
-                      background: '#e8f9ed', color: '#25D366',
+                      background: '#F1F5F9', color: '#475569',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 200ms ease',
-                      textDecoration: 'none'
+                      border: '1px solid #E2E8F0',
+                      cursor: 'pointer',
+                      transition: 'all 200ms ease'
                     }}
-                    title="WhatsApp Resident"
+                    title="Manage Contact Numbers (up to 5)"
                   >
-                    <MessageCircle size={18} />
-                  </a>
-                )}
+                    <Phone size={16} />
+                  </button>
+
+                  {c.customer_phone && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const contacts = c.contacts || [
+                          {
+                            id: `fallback-${c.customer_id}`,
+                            customer_id: c.customer_id,
+                            phone: c.customer_phone,
+                            label: 'Primary',
+                            is_primary: true
+                          }
+                        ];
+                        const msg = `Hi ${c.customer_name} (Flat ${c.flat_number}), reaching out from PressWala regarding your laundry orders.`;
+                        if (contacts.length <= 1) {
+                          const cleanPhone = (contacts[0]?.phone || c.customer_phone).replace(/\D/g, '');
+                          window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+                        } else {
+                          setContactPicker({
+                            isOpen: true,
+                            residentName: c.customer_name,
+                            flatNumber: c.flat_number,
+                            contacts,
+                            message: msg
+                          });
+                        }
+                      }}
+                      style={{
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: '#e8f9ed', color: '#25D366',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 200ms ease'
+                      }}
+                      title={c.contacts && c.contacts.length > 1 ? `Select from ${c.contacts.length} numbers` : 'WhatsApp Resident'}
+                    >
+                      <MessageCircle size={18} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#F6F5F2', padding: '1rem', borderRadius: '16px' }}>
@@ -178,8 +314,36 @@ export const CustomerDirectoryView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Vendor Actions: Password Reset for Resident */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              {/* Vendor Actions: Password Reset & Revoke */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                {c.status === 'revoked' ? (
+                  <div style={{ fontSize: '0.8rem', color: '#DC2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <UserX size={14} /> Access Revoked
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setRevokeModalCustomer(c)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.35rem 0.65rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      borderRadius: '8px',
+                      color: '#DC2626',
+                      background: '#FEE2E2',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                    title="Revoke resident portal access"
+                  >
+                    <UserX size={13} />
+                    <span>Revoke</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => handleOpenResetModal(c)}
@@ -269,6 +433,92 @@ export const CustomerDirectoryView: React.FC = () => {
           </form>
         </Modal>
       )}
+
+      {/* Revoke Resident Access Modal */}
+      {revokeModalCustomer && (
+        <Modal
+          isOpen={true}
+          onClose={() => setRevokeModalCustomer(null)}
+          title={`Revoke Access — Flat ${revokeModalCustomer.flat_number}`}
+        >
+          <div>
+            <div style={{
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: '14px',
+              padding: '1rem',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.6rem',
+              marginBottom: '1.25rem'
+            }}>
+              <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '0.85rem', color: '#92400E', lineHeight: 1.5 }}>
+                Revoking access will immediately disable <strong>{revokeModalCustomer.customer_name}</strong>'s resident login.
+                Past orders, payment logs, and financial records remain safely preserved.
+              </div>
+            </div>
+
+            {revokeError && (
+              <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '12px', padding: '0.75rem', color: '#DC2626', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                {revokeError}
+              </div>
+            )}
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--vendor-muted)', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              The resident will not be able to log in unless they submit a fresh access request and you approve it.
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setRevokeModalCustomer(null)}
+                disabled={isRevoking}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRevoke}
+                disabled={isRevoking}
+                style={{
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '0.75rem 1.25rem',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  cursor: isRevoking ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isRevoking ? 'Revoking...' : 'Confirm Revoke'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* WhatsApp Contact Picker Modal */}
+      <ContactPickerModal
+        isOpen={contactPicker.isOpen}
+        onClose={() => setContactPicker(prev => ({ ...prev, isOpen: false }))}
+        residentName={contactPicker.residentName}
+        flatNumber={contactPicker.flatNumber}
+        contacts={contactPicker.contacts}
+        defaultMessage={contactPicker.message}
+      />
+
+      {/* Manage Contacts Modal */}
+      <ManageContactsModal
+        isOpen={manageModal.isOpen}
+        onClose={() => setManageModal(prev => ({ ...prev, isOpen: false }))}
+        customerId={manageModal.customerId}
+        residentName={manageModal.residentName}
+        flatNumber={manageModal.flatNumber}
+        onUpdated={loadDirectory}
+      />
     </div>
   );
 };

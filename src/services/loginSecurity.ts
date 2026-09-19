@@ -133,3 +133,90 @@ export const loginSecurity = {
     }
   }
 };
+
+interface JoinRequestRecord {
+  timestamps: number[];
+}
+
+const JOIN_REQ_STORAGE_KEY = 'presswala_join_request_rate_v1';
+const MAX_JOIN_REQUESTS_PER_WINDOW = 3;
+const JOIN_REQ_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours window
+
+function getJoinReqStore(): Record<string, JoinRequestRecord> {
+  try {
+    const raw = localStorage.getItem(JOIN_REQ_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveJoinReqStore(store: Record<string, JoinRequestRecord>): void {
+  try {
+    localStorage.setItem(JOIN_REQ_STORAGE_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.warn('[LoginSecurity] Failed to save join request store:', e);
+  }
+}
+
+export const joinRequestSecurity = {
+  checkRateLimit(phone: string): { allowed: boolean; remainingSubmissions: number; retryAfterSeconds: number } {
+    const normalized = phone.trim();
+    if (!normalized) {
+      return { allowed: true, remainingSubmissions: MAX_JOIN_REQUESTS_PER_WINDOW, retryAfterSeconds: 0 };
+    }
+
+    const store = getJoinReqStore();
+    const record = store[normalized];
+    const now = Date.now();
+
+    if (!record) {
+      return { allowed: true, remainingSubmissions: MAX_JOIN_REQUESTS_PER_WINDOW, retryAfterSeconds: 0 };
+    }
+
+    // Filter attempts within 24 hours
+    const recentTimestamps = (record.timestamps || []).filter(t => now - t < JOIN_REQ_WINDOW_MS);
+    record.timestamps = recentTimestamps;
+    saveJoinReqStore(store);
+
+    if (recentTimestamps.length >= MAX_JOIN_REQUESTS_PER_WINDOW) {
+      const oldest = Math.min(...recentTimestamps);
+      const retryAfterSeconds = Math.max(0, Math.ceil((oldest + JOIN_REQ_WINDOW_MS - now) / 1000));
+      return {
+        allowed: false,
+        remainingSubmissions: 0,
+        retryAfterSeconds
+      };
+    }
+
+    return {
+      allowed: true,
+      remainingSubmissions: MAX_JOIN_REQUESTS_PER_WINDOW - recentTimestamps.length,
+      retryAfterSeconds: 0
+    };
+  },
+
+  recordSubmission(phone: string): void {
+    const normalized = phone.trim();
+    if (!normalized) return;
+
+    const store = getJoinReqStore();
+    const now = Date.now();
+    const record = store[normalized] || { timestamps: [] };
+    const recentTimestamps = (record.timestamps || []).filter(t => now - t < JOIN_REQ_WINDOW_MS);
+    recentTimestamps.push(now);
+    record.timestamps = recentTimestamps;
+    store[normalized] = record;
+    saveJoinReqStore(store);
+  },
+
+  clearRateLimit(phone: string): void {
+    const normalized = phone.trim();
+    const store = getJoinReqStore();
+    if (store[normalized]) {
+      delete store[normalized];
+      saveJoinReqStore(store);
+    }
+  }
+};
+
