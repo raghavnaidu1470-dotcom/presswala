@@ -25,7 +25,7 @@ console.log('PressWala Phase C: Block Dashboard & Multi-Contact Tests');
 console.log('====================================================\n');
 
 async function runPhaseCTests() {
-  const { db, initializeDatabase, STORAGE_KEYS } = await import('../src/services/db');
+  const { db, initializeDatabase, STORAGE_KEYS } = await import('../src/services/db.ts');
 
   // Clear and initialize
   localStorage.clear();

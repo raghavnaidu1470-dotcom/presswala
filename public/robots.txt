@@ -2,3 +2,4 @@ User-agent: *
 Disallow: /platform-admin
 Disallow: /platform-admin/
 Disallow: /vendor-onboard/
+Disallow: /vendor-onboard/*

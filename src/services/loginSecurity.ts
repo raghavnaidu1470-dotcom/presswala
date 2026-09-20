@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient.ts';
 
 export interface LockoutStatus {
   isLocked: boolean;

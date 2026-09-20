@@ -1,4 +1,4 @@
-import { 
+import type { 
   GarmentType, 
   User, 
   Order, 
@@ -17,7 +17,7 @@ import {
   BlockGroup,
   OrderChangeProposal,
   DeliverySlotAvailability
-} from '../types';
+} from '../types/index.ts';
 import { 
   INITIAL_GARMENT_TYPES, 
   INITIAL_USERS, 
@@ -27,10 +27,10 @@ import {
   INITIAL_JOIN_REQUESTS,
   INITIAL_CUSTOMER_CONTACTS,
   OFFLINE_DEMO_CREDENTIALS
-} from './seedData';
-import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { validators } from '../utils/validators';
-import { loginSecurity, joinRequestSecurity } from './loginSecurity';
+} from './seedData.ts';
+import { supabase, isSupabaseConfigured } from './supabaseClient.ts';
+import { validators } from '../utils/validators.ts';
+import { loginSecurity, joinRequestSecurity } from './loginSecurity.ts';
 
 export const STORAGE_KEYS = {
   GARMENTS: 'presswala_garments_v2',
@@ -1367,7 +1367,8 @@ export const db = {
     phone: string,
     block: string,
     flatNumber: string,
-    apartmentId: string
+    apartmentId: string,
+    password?: string
   ): Promise<ResidentJoinRequest> {
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim();
@@ -1444,6 +1445,11 @@ export const db = {
     joinRequests.unshift(newRequest);
     saveToStorage(STORAGE_KEYS.JOIN_REQUESTS, joinRequests);
     joinRequestSecurity.recordSubmission(trimmedPhone);
+
+    if (password && password.trim()) {
+      OFFLINE_DEMO_CREDENTIALS[normalizedFlat] = password.trim();
+      OFFLINE_DEMO_CREDENTIALS[trimmedPhone] = password.trim();
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {

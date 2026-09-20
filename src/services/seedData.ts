@@ -1,4 +1,4 @@
-import { GarmentType, User, Order, Payment, Apartment, ResidentJoinRequest, CustomerContact } from '../types';
+import type { GarmentType, User, Order, Payment, Apartment, ResidentJoinRequest, CustomerContact } from '../types/index.ts';
 
 export const INITIAL_GARMENT_TYPES: GarmentType[] = [
   {

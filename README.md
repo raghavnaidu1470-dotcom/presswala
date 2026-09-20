@@ -96,23 +96,40 @@ This repository is pre-configured for zero-configuration static deployment:
 
 ---
 
-## Default Demo Credentials (Public App)
+## Default Demo Credentials (Public App & Local Development)
 
-- **Resident (Customer)**:
-  - Flat: `A-101` | PIN: `1010` (Sharma Ji)
-  - Flat: `A-204` | PIN: `2040` (Pooja Verma — has ₹110 outstanding order)
-  - Flat: `B-302` | PIN: `3020` (Karthik Raja)
-- **Vendor**:
-  - Login Key: `VENDOR` or `9876543210` | PIN: `1234`
+> [!WARNING]
+> The accounts below are pre-seeded for development, staging, and offline evaluation only. In a production deployment connected to a live Supabase database, these credentials MUST be rotated or deleted before inviting real residents and vendors.
+
+- **Platform Owner (Restricted route `/platform-admin`)**:
+  - Key / Mobile: `SUPER_OWNER_KEY` or `9800000001`
+  - Password: `PressWala!Ops#2026` (or `PressWala!Owner#2026`)
+  - Status: `active`
+- **Vendors**:
+  - **Palm Heights Apartments**: `VENDOR` or `9876543210` | PIN: `1234` (Ramu Dhobi — status: `active`)
+  - **Royal Palms Residency**: `VENDOR-SURESH` or `9876543211` | PIN: `1234` (Suresh Laundry — status: `pending` approval)
+  - **Test Vendor**: `9876522222` (Apex Ironing Hub — used in automated invite onboarding tests)
+- **Residents (Palm Heights Apartments)**:
+  - Flat: `A-1001` (or `A-101`) | PIN: `1010` (Sharma Ji — active, dues: ₹54, 3 phone numbers)
+  - Flat: `A-2004` (or `A-204`) | PIN: `2040` (Pooja Verma — active, dues: ₹110)
+  - Flat: `B-3002` (or `B-302`) | PIN: `3020` (Karthik Raja — active, dues: ₹0)
+  - Flat: `C-4005` | PIN: `4005` (Ananya Patel — active, dues: ₹0)
 
 ---
 
 ## 🔒 Production Security & Dedicated Platform Admin Notice
 
 > [!CAUTION]
-> **CRITICAL SECURITY REQUIREMENT FOR PRODUCTION DEPLOYMENTS:**
+> **CRITICAL SECURITY CHECKLIST BEFORE LIVE PRODUCTION DEPLOYMENT:**
 > 
-> 1. **Unlinked Route**: The Platform Owner operations console is completely separated from the resident and vendor app and is reachable **only** via the dedicated, unlinked route `/platform-admin`. It is not linked in any navigation menu, footer, sitemap, or public UI.
-> 2. **Immediate Credential Rotation**: The temporary bootstrap owner seed account (`SUPER_OWNER_KEY` / `9800000001` with default password `PressWala!Owner#2026`) is provided **strictly** for initial environment provisioning. You **MUST** change this password immediately upon real production deployment before onboarding vendors or residents.
-> 3. **Never Re-run Seed Scripts in Production**: Database seed migrations or scripts containing seed users must **never** be re-run against an active production database once a real Owner account exists, as doing so could overwrite production state or reintroduce default credentials.
+> 1. **Hidden Route Isolation**: The Platform Owner operations console is isolated from the public resident and vendor app and is accessible **strictly** via the dedicated, unlinked route `/platform-admin`. It is excluded from all public navigation, footer links, sitemaps, and indexing via `robots.txt`.
+> 2. **Immediate Owner Credential Rotation**: The temporary bootstrap owner seed account (`SUPER_OWNER_KEY` / `9800000001`) MUST have its password rotated immediately upon live deployment before onboarding vendors or residents.
+> 3. **Demo Account Removal / Truncation**: When provisioning your live Supabase database:
+>    - Remove demo vendors (`VENDOR-SURESH`, `Apex Ironing Hub`) from `public.users` and `auth.users`.
+>    - Remove demo residents (`A-1001`, `A-2004`, `B-3002`, `C-4005`) if starting with a clean slate.
+>    - If preserving initial garment types catalog, ensure prices match the local vendor's actual rate sheet.
+> 4. **No Silent Re-seeding in Production**:
+>    - The client-side database initializer (`initializeDatabase()`) only runs against the browser's `localStorage` in offline/local-first mode; it **never** writes demo seed accounts to a remote Supabase database.
+>    - The remote provisioning migrations utilize idempotent constraints (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`), preventing accidental overwriting of existing production user passwords or operational records.
+>    - The setup script (`scripts/setup-db.js`) requires explicit administrative invocation and never runs automatically during client-side builds or runtime.
 
